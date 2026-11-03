@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 /**
@@ -23,6 +24,8 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   serverExternalPackages: ["@modelcontextprotocol/sdk"],
   turbopack: {
+    // Fissa la radice al progetto: sul server in ~ c'è un altro package-lock.json che Next scambierebbe per la radice.
+    root: path.resolve(process.cwd()),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

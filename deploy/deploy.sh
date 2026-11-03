@@ -161,8 +161,9 @@ set -a; . "\$ENVF"; set +a
 cd "\$APP"
 if [ "$SKIP_BUILD" = 0 ]; then
   echo "--> npm ci"
-  npm ci --no-audit --no-fund
+  npm ci --include=dev --no-audit --no-fund   # le devDependencies (tailwind, typescript) servono al build
   echo "--> npm run build"
+  rm -rf .next   # niente cache di build precedenti (un build fallito ne lascia di inconsistenti)
   npm run build
 fi
 
@@ -199,7 +200,7 @@ if systemctl --user cat bazaar >/dev/null 2>&1; then
   systemctl --user restart bazaar
   sleep 3
   systemctl --user --no-pager --lines=8 status bazaar || true
-  curl -s -o /dev/null -w "locale: http://127.0.0.1:${APP_PORT}${APP_BASE_PATH:-}/login -> %{http_code}\\n" "http://127.0.0.1:${APP_PORT}\${APP_BASE_PATH:-}/login" || true
+  curl -s -o /dev/null -w "locale: http://127.0.0.1:${APP_PORT}\${APP_BASE_PATH:-}/login -> %{http_code}\\n" "http://127.0.0.1:${APP_PORT}\${APP_BASE_PATH:-}/login" || true
 else
   echo "ATTENZIONE: bazaar.service non installata. Rilancia con --install-unit."
 fi
