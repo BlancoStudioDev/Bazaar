@@ -8,6 +8,7 @@ import { ConnectionsDialog } from "@/components/connections-dialog";
 import { ModelDialog } from "@/components/model-dialog";
 import { ResultsBoard } from "@/components/results-board";
 import { Sidebar } from "@/components/sidebar";
+import type { ClientUser } from "@/components/home-client";
 import { Spinner } from "@/components/ui";
 import type { BazaarStore } from "@/lib/use-bazaar";
 import { cn } from "@/lib/ui";
@@ -23,7 +24,7 @@ function countProducts(store: BazaarStore): number {
   return set.size;
 }
 
-export function AppShell({ store }: { store: BazaarStore }) {
+export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUser }) {
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [desktopSidebar, setDesktopSidebar] = useState(true);
   const [mobileResults, setMobileResults] = useState(false);
@@ -67,6 +68,7 @@ export function AppShell({ store }: { store: BazaarStore }) {
       <div className={cn("hidden", desktopSidebar && "lg:flex")}>
         <Sidebar
           store={store}
+          user={user}
           onNew={() => {
             store.newConversation();
             setMobileSidebar(false);
@@ -86,6 +88,7 @@ export function AppShell({ store }: { store: BazaarStore }) {
           <div className="relative z-10 h-full w-[302px] max-w-[88vw] animate-slide-right">
             <Sidebar
               store={store}
+              user={user}
               mobile
               onNew={() => {
                 store.newConversation();

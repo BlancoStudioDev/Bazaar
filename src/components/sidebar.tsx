@@ -1,6 +1,10 @@
 "use client";
 
-import { Plus, Settings2, Trash2, X } from "lucide-react";
+import { LogOut, Plus, Settings2, Trash2, X } from "lucide-react";
+import { useState } from "react";
+
+import type { ClientUser } from "@/components/home-client";
+import { authClient } from "@/lib/auth/client";
 
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
 import type { BazaarStore } from "@/lib/use-bazaar";
@@ -8,6 +12,7 @@ import { cn, groupConversations, relativeTime } from "@/lib/ui";
 
 export function Sidebar({
   store,
+  user,
   onNew,
   onOpenSettings,
   onClose,
@@ -15,12 +20,22 @@ export function Sidebar({
   mobile = false,
 }: {
   store: BazaarStore;
+  user?: ClientUser;
   onNew: () => void;
   onOpenSettings: () => void;
   onClose?: () => void;
   onSelect?: () => void;
   mobile?: boolean;
 }) {
+  const [signingOut, setSigningOut] = useState(false);
+  const signOut = async () => {
+    setSigningOut(true);
+    try {
+      await authClient.signOut();
+    } finally {
+      window.location.assign("/login");
+    }
+  };
   const groups = groupConversations(store.conversations);
   const online = store.status?.mcp.filter((server) => server.status === "online").length ?? 0;
   const total = store.status?.mcp.length || MARKETPLACE_IDS.length;
@@ -136,6 +151,25 @@ export function Sidebar({
             {store.status ? `${online}/${total}` : "…"}
           </span>
         </button>
+        {user?.authEnabled ? (
+          <div className="mt-1 flex items-center gap-2 px-3 py-1">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] text-sidebar-ink">{user.name}</p>
+              {user.email && user.email !== user.name ? (
+                <p className="truncate font-mono text-[11px] text-sidebar-ink/45">{user.email}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              disabled={signingOut}
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12px] text-sidebar-ink/60 transition hover:bg-white/10 hover:text-sidebar-ink disabled:opacity-60"
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              Esci
+            </button>
+          </div>
+        ) : null}
       </div>
     </aside>
   );

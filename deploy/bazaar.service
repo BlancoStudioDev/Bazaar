@@ -1,0 +1,40 @@
+# /etc/systemd/system/bazaar.service
+# I segnaposto @DEPLOY_PATH@ e @DEPLOY_USER@ sono sostituiti da deploy.sh --install-unit
+# (oppure con sed a mano, vedi deploy/README.md).
+[Unit]
+Description=Bazaar (Next.js + server MCP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@DEPLOY_USER@
+Group=@DEPLOY_USER@
+WorkingDirectory=@DEPLOY_PATH@/app
+# Contiene i segreti (chmod 600, di proprieta' di @DEPLOY_USER@). Mai nel repo.
+EnvironmentFile=@DEPLOY_PATH@/.env.production
+Environment=NODE_ENV=production
+# Se node e' installato con nvm/fnm, sostituisci /usr/bin/node con il percorso reale (which node).
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p ${PORT}
+Restart=on-failure
+RestartSec=5
+# I server MCP sono processi figli: li termina tutti allo stop.
+KillMode=control-group
+TimeoutStopSec=20
+
+# Hardening di base
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+# Scrittura consentita solo qui: database auth (data/), MCP (cache, __pycache__) e cache di Next.
+ReadWritePaths=@DEPLOY_PATH@/data @DEPLOY_PATH@/mcp @DEPLOY_PATH@/app/.next
+
+[Install]
+WantedBy=multi-user.target

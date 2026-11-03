@@ -15,8 +15,10 @@ import type {
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
 import { conversationTitle, uid } from "@/lib/ui";
 
-const CONVERSATIONS_KEY = "bazaar.conversations.v1";
-const SETTINGS_KEY = "bazaar.settings.v1";
+const LEGACY_CONVERSATIONS_KEY = "bazaar.conversations.v1";
+const LEGACY_SETTINGS_KEY = "bazaar.settings.v1";
+const conversationsKey = (userId: string) => `${LEGACY_CONVERSATIONS_KEY}.u.${userId}`;
+const settingsKey = (userId: string) => `${LEGACY_SETTINGS_KEY}.u.${userId}`;
 const MAX_CONVERSATIONS = 40;
 const MAX_MESSAGES = 80;
 
@@ -166,7 +168,9 @@ async function readSse(
   if (buffer.trim()) processBlock(buffer);
 }
 
-export function useBazaar() {
+export function useBazaar(userId: string) {
+  const CONVERSATIONS_KEY = conversationsKey(userId);
+  const SETTINGS_KEY = settingsKey(userId);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -194,6 +198,22 @@ export function useBazaar() {
   );
 
   useEffect(() => {
+    // Migrazione una tantum: i dati senza prefisso utente passano al primo utente che entra.
+    try {
+      if (localStorage.getItem(CONVERSATIONS_KEY) === null) {
+        const legacy = localStorage.getItem(LEGACY_CONVERSATIONS_KEY);
+        if (legacy !== null) {
+          localStorage.setItem(CONVERSATIONS_KEY, legacy);
+          localStorage.removeItem(LEGACY_CONVERSATIONS_KEY);
+        }
+      }
+      if (localStorage.getItem(SETTINGS_KEY) === null) {
+        const legacy = localStorage.getItem(LEGACY_SETTINGS_KEY);
+        if (legacy !== null) localStorage.setItem(SETTINGS_KEY, legacy);
+      }
+    } catch {
+      // storage non disponibile: ignora
+    }
     const storedConversations = sanitizeConversations(
       safeParse<unknown>(localStorage.getItem(CONVERSATIONS_KEY), []),
     );

@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth/session";
 import { getMcpManager } from "@/lib/mcp/manager";
 import { fetchOpenRouterKeyInfo } from "@/lib/openrouter/models";
 import { getActiveDirectProviders, providerModelName } from "@/lib/openrouter/providers";
@@ -20,7 +21,10 @@ async function buildStatus() {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireUser(request);
+  if ("response" in auth) return auth.response;
+
   const status = await buildStatus();
   return Response.json(status, {
     headers: { "Cache-Control": "no-store" },
@@ -28,6 +32,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireUser(request);
+  if ("response" in auth) return auth.response;
+
   let body: { action?: string; server?: MarketplaceId } = {};
   try {
     body = (await request.json()) as { action?: string; server?: MarketplaceId };

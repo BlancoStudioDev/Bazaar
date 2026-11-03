@@ -173,6 +173,16 @@ node scripts/test-mcp.mjs aliexpress
 - **Persistenza**: solo `localStorage` del browser, nessun account o database.
 - **Nessun acquisto**: Bazaar cerca e confronta, non compra e non gestisce carrelli.
 
+## Deploy e multiutente
+
+Bazaar può girare su un server Linux dietro nginx/TLS con login (OIDC onionrings) e whitelist di email. Script, unit systemd, vhost nginx e guida passo per passo sono in [`deploy/`](deploy/README.md) (`deploy/deploy.sh --dry-run` per provare senza toccare nulla).
+
+Limiti noti:
+
+- I server MCP sono **condivisi** tra tutti gli utenti: marketplace con rate limit e anti-bot, e gli IP datacenter vengono bloccati più facilmente. Amazon, AliExpress, Vinted e Subito possono rispondere con blocchi dal server anche se in locale funzionano.
+- **Facebook Marketplace è disabilitato sul server** (`MCP_DISABLED=facebook-marketplace`): legge i cookie dal profilo Chrome del Mac. I cookie manuali sono possibili ma sconsigliati (vedi `deploy/README.md`).
+- Le conversazioni restano in `localStorage` del browser, per utente e per dispositivo: non sono sincronizzate né recuperabili dal server.
+
 ## Note di design
 
 - Palette carta calda, inchiostro scuro e accento vermiglio; serif display (Instrument Serif) per i titoli, Geist per il testo, mono per i dati.

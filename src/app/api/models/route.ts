@@ -1,9 +1,13 @@
+import { requireUser } from "@/lib/auth/session";
 import { describeModelForClient, paidFallbackAvailable } from "@/lib/agent/run";
 import { getCheapTier, getModelRegistry, getPaidFallbackModel } from "@/lib/openrouter/models";
 
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
+  const auth = await requireUser(request);
+  if ("response" in auth) return auth.response;
+
   const url = new URL(request.url);
   const force = url.searchParams.get("refresh") === "1";
   const registry = await getModelRegistry(force);

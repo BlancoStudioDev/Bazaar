@@ -1,4 +1,6 @@
 import { runAgent } from "@/lib/agent/run";
+import { acquireChatSlot, rateLimitResponse } from "@/lib/auth/limits";
+import { requireUser } from "@/lib/auth/session";
 import { OpenRouterError } from "@/lib/openrouter/models";
 import type { AgentEvent, ChatRequestBody } from "@/lib/types";
 
@@ -9,6 +11,9 @@ function sse(event: AgentEvent): string {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireUser(request);
+  if ("response" in auth) return auth.response;
+
   let body: ChatRequestBody;
   try {
     body = (await request.json()) as ChatRequestBody;
@@ -19,6 +24,10 @@ export async function POST(request: Request) {
   if (!body || !Array.isArray(body.messages) || body.messages.length === 0) {
     return Response.json({ error: "Nessun messaggio nella richiesta." }, { status: 400 });
   }
+
+  // Ogni richiesta è associata a session.user.id: limiti per utente e globali.
+  const slot = acquireChatSlot(auth.user.id);
+  if (!slot.ok) return rateLimitResponse(slot);
 
   const encoder = new TextEncoder();
   let closed = false;
@@ -45,6 +54,7 @@ export async function POST(request: Request) {
       }, 15_000);
 
       const finish = () => {
+        slot.release();
         if (heartbeat) clearInterval(heartbeat);
         if (!closed) {
           closed = true;
@@ -70,6 +80,7 @@ export async function POST(request: Request) {
         .finally(finish);
     },
     cancel() {
+      slot.release();
       closed = true;
       if (heartbeat) clearInterval(heartbeat);
     },
