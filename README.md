@@ -1,6 +1,6 @@
 # bazaar
 
-Personal shopper conversazionale che cerca in tempo reale su sei marketplace — **Amazon.it, eBay.it, AliExpress, Vinted, Subito.it e Facebook Marketplace** — confronta i prezzi e dice dove conviene comprare.
+Personal shopper conversazionale che cerca in tempo reale su sei marketplace — **Amazon.it, eBay (venduti US/UK), AliExpress, Vinted, Subito.it e Facebook Marketplace** — confronta i prezzi e dice dove conviene comprare.
 
 Non è un catalogo: è una chat. Scrivi cosa cerchi, Bazaar chiama i server MCP locali, normalizza gli annunci in schede prodotto e risponde con una raccomandazione secca, una tabella comparativa e i link agli annunci. I risultati restano anche nella **Bacheca**, ordinabili per prezzo o per fonte.
 
@@ -63,7 +63,7 @@ npm start
 | `MCP_PYTHON_SHARED` | `$MCP_ROOT/.venv/bin/python` | Python per Amazon, eBay, AliExpress, Vinted. |
 | `MCP_PYTHON_SUBITO` | `$MCP_ROOT/subito-search/.venv/bin/python` | Python per Subito. |
 | `MCP_PYTHON_FACEBOOK` | `$MCP_ROOT/facebook-marketplace/.venv/bin/python` | Python per Facebook Marketplace. |
-| `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET` / `EBAY_ENV` | — | Opzionali: API ufficiali eBay Browse (gratuite, [developer.ebay.com](https://developer.ebay.com)); `EBAY_ENV=sandbox` per il sandbox. Senza, il server MCP legge ebay.it via scraping. |
+| `TRAWL_API_KEY` | — | Chiave [trawl.dev](https://trawl.dev/signup) (gratuita, 1 credito per ricerca) per eBay: sono prezzi di **vendita** reali su ebay.com / ebay.co.uk (USD/GBP), usati come riferimento di mercato, non offerte acquistabili. Senza, eBay risponde con un errore esplicito. |
 | `MCP_DISABLED` | — | Lista separata da virgole di server da non avviare (es. `aliexpress`). |
 
 La chiave resta nel processo Next.js: il browser chiama solo `/api/*`.

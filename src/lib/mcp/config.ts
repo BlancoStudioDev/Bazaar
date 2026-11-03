@@ -60,10 +60,10 @@ function server(
   };
 }
 
-/** Credenziali opzionali per le API ufficiali eBay (senza, il server fa scraping di ebay.it). */
+/** Chiave trawl.dev (gratuita su https://trawl.dev/signup): senza, il server eBay risponde con un errore esplicito. */
 function ebayEnv(): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const key of ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "EBAY_ENV"]) {
+  for (const key of ["TRAWL_API_KEY"]) {
     const value = process.env[key];
     if (value) out[key] = value;
   }

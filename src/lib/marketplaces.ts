@@ -22,12 +22,12 @@ export const MARKETPLACES: Record<MarketplaceId, MarketplaceMeta> = {
   },
   ebay: {
     id: "ebay",
-    label: "eBay.it",
+    label: "eBay venduti (US/UK)",
     shortLabel: "eBay",
     color: "#e53238",
     textColor: "#fff5f5",
-    description: "Nuovo e usato, aste e Compralo Subito",
-    domain: "ebay.it",
+    description: "Prezzi di vendita reali su eBay US/UK",
+    domain: "ebay.com",
   },
   aliexpress: {
     id: "aliexpress",

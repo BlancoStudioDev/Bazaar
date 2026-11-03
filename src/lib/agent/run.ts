@@ -77,6 +77,7 @@ function prepareToolArguments(
   city: string,
   supportsJson: boolean,
   hasCityParam: boolean,
+  cityIsExplicit = false,
 ): Record<string, unknown> {
   const prepared: Record<string, unknown> = { ...args };
   // I modelli piccoli riempiono i parametri opzionali con segnaposto ("n/d", "null"...):
@@ -95,6 +96,12 @@ function prepareToolArguments(
   }
   // La città (impostazioni, o quella nominata esplicitamente dall'utente) vince sempre su quella scelta dal modello.
   if (hasCityParam || tool === "search_marketplace") prepared.city = city;
+  // Su Subito "solo spedibili" serve proprio a uscire dalla provincia: senza una città chiesta
+  // dall'utente cerca in tutta Italia invece che solo nella città delle Impostazioni.
+  if (tool === "search_subito" && prepared.shipping_only === true && !cityIsExplicit) {
+    delete prepared.city;
+    delete prepared.region;
+  }
   if (tool === "search_marketplace") {
     const radius = Number(prepared.radius_km);
     prepared.radius_km = Number.isFinite(radius) ? Math.max(1, Math.min(120, Math.trunc(radius))) : 30;
@@ -554,6 +561,7 @@ export async function runAgent(options: {
           city,
           supportsJsonFormat(tools, resolved.tool),
           supportsParam(tools, resolved.tool, "city"),
+          Boolean(explicitCity),
         );
         activity.args = args;
         emit({ type: "activity", activity: { ...activity, args } });

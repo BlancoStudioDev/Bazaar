@@ -370,16 +370,24 @@ export function normalizeToolOutput(
       if (!row) return null;
       const url = safeUrl(row.url);
       const id = text(row.id) || idFromUrl(url, `ebay-${index}`);
-      const feedback = text(row.feedback);
-      const seller = text(row.venditore);
-      const notes = [text(row.formato), text(row.spedizione)].filter(Boolean);
-      return makeProduct("ebay", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+      const sold = text(row.venduto_il);
+      const notes = [sold ? `Venduto il ${sold}` : null, text(row.formato), text(row.spedizione)].filter(Boolean);
+      // Prezzo di VENDITA in USD/GBP: l'etichetta porta il simbolo della valuta, ma `price`
+      // resta null così non entra mai in ordinamento, "più basso" e mediane plausibilità
+      // (che ragionano in euro) mescolandosi con gli annunci acquistabili.
+      const label = text(row.prezzo) || null;
+      const product = makeProduct("ebay", id, text(row.titolo) || "", label, null, url, {
         image: imageUrl(row.immagine),
         condition: text(row.condizioni),
         location: text(row.luogo),
-        seller: seller ? (feedback ? `${seller} (${feedback})` : seller) : "Venditore eBay",
+        seller: "Venduto su eBay",
         extra: notes.length ? notes.join(" · ") : null,
       });
+      if (product) {
+        product.price = null;
+        if (!label) product.priceLabel = null;
+      }
+      return product;
     });
     finishSearch("risultati", items, mapped);
   } else if (server === "aliexpress") {
@@ -435,12 +443,17 @@ export function normalizeToolOutput(
       const url = safeUrl(row.link ?? row.url);
       const id = idFromUrl(url, `subito-${index}`);
       const date = text(row.data);
-      return makeProduct("subito", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo), url, {
+      const notes = [
+        subitoShipping(row),
+        text(row.categoria),
+        date ? `Pubblicato: ${date.slice(0, 10)}` : null,
+      ].filter(Boolean);
+      return makeProduct("subito", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num ?? row.prezzo), url, {
         image: imageUrl(row.immagine),
-        condition: "Usato",
+        condition: text(row.condizione) || "Usato",
         location: text(row.luogo),
-        seller: "Venditore Subito",
-        extra: date ? `Pubblicato: ${date.slice(0, 10)}` : null,
+        seller: subitoSeller(row),
+        extra: notes.length ? notes.join(" · ") : null,
       });
     });
     finishSearch("risultati", items, mapped);
@@ -531,7 +544,15 @@ function essential(row: Record<string, unknown>, server: MarketplaceId): Record<
   const title = text(row.titolo);
   if (title) out.titolo = title.slice(0, 90);
   const price = num(priceRaw);
-  if (price != null) out.prezzo_num = price;
+  if (server === "ebay") {
+    // Venduto in USD/GBP: mai un numero nudo (il modello lo scambierebbe per euro).
+    const label = text(row.prezzo);
+    if (label) out.prezzo_venduto = label;
+    const currency = text(row.valuta);
+    if (currency) out.valuta = currency;
+    const sold = text(row.venduto_il);
+    if (sold) out.venduto_il = sold;
+  } else if (price != null) out.prezzo_num = price;
   const condition = text(row.condizioni) || text(row.condizione) || (server === "amazon" || server === "aliexpress" ? "nuovo" : undefined);
   if (condition) out.condizione = condition;
   const place = text(row.luogo);
@@ -540,10 +561,32 @@ function essential(row: Record<string, unknown>, server: MarketplaceId): Record<
   if (format) out.formato = format;
   const url = shortUrl(row.url ?? row.link);
   if (url) out.url = url;
+  if (server === "subito") {
+    const shipping = subitoShipping(row);
+    if (shipping) out.spedizione = shipping;
+    const seller = text(row.venditore);
+    if (seller) out.venditore = seller.slice(0, 40);
+    const date = text(row.data);
+    if (date) out.data = date.slice(0, 10);
+  }
   // Solo i candidati arricchiti (vedi agent/enrich.ts) portano una descrizione.
   const description = cleanDescription(row.descrizione, 240);
   if (description) out.descrizione = description;
   return out;
+}
+
+/** "Spedizione 0,99 €" / "Solo ritiro a mano" dai campi del server Subito (null se il dato manca). */
+function subitoShipping(row: Record<string, unknown>): string | null {
+  if (typeof row.spedizione !== "boolean") return null;
+  if (!row.spedizione) return "Solo ritiro a mano";
+  const cost = text(row.costo_spedizione);
+  return cost ? `Spedizione ${cost}` : "Spedizione disponibile";
+}
+
+function subitoSeller(row: Record<string, unknown>): string {
+  const seller = text(row.venditore);
+  if (!seller) return "Venditore Subito";
+  return seller === "privato" ? "Privato" : seller.replace(/^negozio/, "Negozio");
 }
 
 /**
@@ -570,7 +613,9 @@ export function compactToolOutputForModel(
     const picked = pick(record, [
       "titolo", "title", "prezzo", "prezzo_num", "price", "brand", "condizioni",
       "condizione", "disponibilita", "luogo", "venditore", "descrizione", "url", "valutazione", "stato", "formato", "spedizione",
+      "valuta", "venduto_il", "feedback", "attributi", "vendite", "stato_annuncio",
     ]);
+    if (server === "ebay") delete picked.prezzo_num;
     if (typeof picked.descrizione === "string") picked.descrizione = picked.descrizione.slice(0, 900);
     if (typeof picked.url === "string") picked.url = shortUrl(picked.url);
     return JSON.stringify(picked).slice(0, maxChars);
@@ -582,10 +627,28 @@ export function compactToolOutputForModel(
     return row ? essential(row, server) : item;
   });
 
-  const cityNote = record.filtro_citta
-    ? { nota: items.length ? `solo annunci a ${record.filtro_citta}` : `NESSUN annuncio a ${record.filtro_citta}: dillo esplicitamente all'utente` }
-    : {};
-  const extraNote = { ...(record.scartati_sospetti ? { scartati_sospetti: record.scartati_sospetti } : {}), ...cityNote };
+  const notes = [
+    text(record.nota),
+    record.filtro_citta
+      ? items.length ? `solo annunci a ${record.filtro_citta}` : `NESSUN annuncio a ${record.filtro_citta}: dillo esplicitamente all'utente`
+      : null,
+  ].filter(Boolean);
+  // Subito dice quanti annunci corrispondono in tutto e quali filtri ha applicato davvero.
+  const filters = asRecord(record.filtri);
+  const extraNote = {
+    ...(typeof record.disponibili === "number" ? { disponibili: record.disponibili } : {}),
+    ...(filters && Object.keys(filters).length ? { filtri: filters } : {}),
+    ...(record.scartati_sospetti ? { scartati_sospetti: record.scartati_sospetti } : {}),
+    ...(server === "ebay"
+      ? {
+          ...(text(record.valuta) ? { valuta: text(record.valuta) } : {}),
+          ...(text(record.sito) ? { sito: text(record.sito) } : {}),
+          ...(asRecord(record.statistiche) ? { statistiche_vendite: record.statistiche } : {}),
+          avviso: "VENDUTI (non acquistabili), valuta indicata, non euro",
+        }
+      : {}),
+    ...(notes.length ? { nota: notes.join(" · ") } : {}),
+  };
   let payload = JSON.stringify({ fonte: server, totale: record.totale ?? items.length, ...extraNote, risultati: compactItems });
   // Se supera il tetto, riduci gli item invece di troncare il JSON a metà.
   let keep = compactItems.length;
@@ -609,6 +672,7 @@ export function summarizeToolContentForModel(content: string): string {
       .map((row) => ({
         titolo: typeof row.titolo === "string" ? row.titolo.slice(0, 50) : undefined,
         prezzo_num: row.prezzo_num,
+        prezzo_venduto: row.prezzo_venduto,
         url: row.url,
       }));
     return JSON.stringify({ fonte: parsed.fonte, riassunto: `${parsed.risultati.length} risultati, migliori 3`, top });

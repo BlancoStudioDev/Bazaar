@@ -51,7 +51,7 @@ const test = {
   ebay: ["search_ebay", { query: query, limit, format: "json" }],
   aliexpress: ["search_aliexpress", { query: query, limit, format: "json" }],
   vinted: ["search_vinted", { query: query, limit, format: "json" }],
-  subito: ["search_subito", { query: query, limit }],
+  subito: ["search_subito", { query: query, limit, category: process.env.SUBITO_CATEGORY || undefined, shipping_only: process.env.SUBITO_SHIPPING === "1" }],
   "facebook-marketplace": ["search_marketplace", { query: query, city: "Milano", limit, format: "json" }],
 }[name];
 if (test) {
