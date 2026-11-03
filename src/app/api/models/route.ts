@@ -1,5 +1,5 @@
 import { describeModelForClient, paidFallbackAvailable } from "@/lib/agent/run";
-import { getModelRegistry, getPaidFallbackModel } from "@/lib/openrouter/models";
+import { getCheapTier, getModelRegistry, getPaidFallbackModel } from "@/lib/openrouter/models";
 
 export const maxDuration = 60;
 
@@ -14,8 +14,11 @@ export async function GET(request: Request) {
       selected: registry.selected ? describeModelForClient(registry.selected) : null,
       models: registry.models.map(describeModelForClient),
       routerModel: registry.routerModel ? describeModelForClient(registry.routerModel) : null,
+      cheapModels: (registry.cheapModels || []).map(describeModelForClient),
       paidFallbackAvailable: paidFallbackAvailable(),
-      paidFallbackModel: paidFallbackAvailable() ? getPaidFallbackModel() : null,
+      paidFallbackModel: paidFallbackAvailable()
+        ? (getCheapTier(registry)[0] ?? getPaidFallbackModel())
+        : null,
     },
     {
       headers: { "Cache-Control": "no-store" },

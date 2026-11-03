@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ArrowRight, ExternalLink } from "lucide-react";
 
-import { MARKETPLACES } from "@/lib/marketplaces";
+import { MARKETPLACES, productHref } from "@/lib/marketplaces";
 import type { Product } from "@/lib/types";
 import { cn, formatPrice, truncate } from "@/lib/ui";
 
@@ -57,7 +57,7 @@ export function ProductCard({ product }: { product: Product }) {
 
   return (
     <a
-      href={product.url}
+      href={productHref(product)}
       target="_blank"
       rel="noopener noreferrer"
       className="group flex min-h-[72px] gap-3 rounded-xl p-2 transition hover:bg-card"

@@ -54,11 +54,10 @@ export function Composer({
   };
 
   const enabled = store.settings.enabledMarketplaces.length;
-  const scope = `${enabled} marketplace${
-    store.settings.enabledMarketplaces.includes("facebook-marketplace")
-      ? ` · ${store.settings.city}`
-      : ""
-  }`;
+  const local = store.settings.enabledMarketplaces.some(
+    (id) => id === "facebook-marketplace" || id === "subito",
+  );
+  const scope = `${enabled} marketplace${local ? ` · ${store.settings.city.trim() || "Milano"}` : ""}`;
 
   return (
     <div className="composer-wrap">

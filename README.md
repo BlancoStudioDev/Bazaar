@@ -57,7 +57,8 @@ npm start
 | `OPENROUTER_APP_URL` | `http://localhost:3000` | Header `HTTP-Referer` per OpenRouter. |
 | `OPENROUTER_APP_NAME` | `Bazaar` | Header `X-Title`. |
 | `OPENROUTER_ALLOW_PAID_FALLBACK` | `false` | Opt-in: consente la riserva a pagamento (richiede `OPENROUTER_API_KEY`). |
-| `OPENROUTER_PAID_FALLBACK_MODEL` | `deepseek/deepseek-v4.1-flash` | Modello usato automaticamente se i free sono saturi (disattivabile dalle impostazioni). |
+| `OPENROUTER_CHEAP_MODELS` | dinamico | Tier economico a pagamento (id separati da virgola). Default: i 3 modelli con tool support più economici del catalogo OpenRouter (gpt-oss, qwen, deepseek, gemini flash, llama, glm, mistral, gemma) sopra una soglia di qualità/contesto. |
+| `OPENROUTER_PAID_FALLBACK_MODEL` | `deepseek/deepseek-v4.1-flash` | Ultima riserva fissa, dopo free e tier economico (richiede il toggle nelle impostazioni). |
 | `MCP_ROOT` | `~/.config/opencode/mcp` | Radice dei server MCP. |
 | `MCP_PYTHON_SHARED` | `$MCP_ROOT/.venv/bin/python` | Python per Amazon, AliExpress, Vinted. |
 | `MCP_PYTHON_SUBITO` | `$MCP_ROOT/subito-search/.venv/bin/python` | Python per Subito. |
@@ -70,7 +71,9 @@ La chiave resta nel processo Next.js: il browser chiama solo `/api/*`.
 
 L'obiettivo è costo zero. I provider con chiave presente vengono provati in quest'ordine:
 provider free diretti (Groq, Cerebras, Gemini, Mistral) -> modelli OpenRouter `:free` -> router free -> riserva a pagamento (solo se `OPENROUTER_ALLOW_PAID_FALLBACK=true`).
-I modelli che rispondono 429 vanno in cooldown (60 s) e vengono saltati. I default dei modelli sono sovrascrivibili con `*_MODEL`; verifica sulle doc dei provider quali modelli sono ancora nel free tier.
+Ordine con la riserva attiva: free (max 6 pronti, con un retry di 1,5 s sul 429) -> tier economico dal più economico -> riserva fissa -> modelli in cooldown. I 429 persistenti vanno in cooldown 60 s; i fallimenti sistematici (404/400 per data policy, tool-call non valide) 15 minuti, e vengono scritti nel log del server (`[bazaar] <modello> ha fallito…`). Nota: il catalogo `/models` è filtrato dalle impostazioni privacy/data policy dell'account OpenRouter; se tutti i free richiedono di condividere i prompt, ne resteranno pochissimi (o nessuno) e si userà il tier economico. L'etichetta del modello mostra "a pagamento ~$X/1M token" quando se ne usa uno.
+
+Dove si concentra il costo: i server MCP sono processi locali gratuiti (scraping); il costo LLM è solo nei token di contesto (system prompt + schemi dei tool + risultati dei tool, moltiplicati per i round). Gli schemi dei tool vengono compattati prima dell'invio. I default dei modelli sono sovrascrivibili con `*_MODEL`; verifica sulle doc dei provider quali modelli sono ancora nel free tier.
 
 Riduzione token: cronologia max 8 messaggi (3000 caratteri l'uno), max 4 round di tool, max 8 risultati per ricerca con soli campi essenziali (tetto 6000 caratteri per tool), vecchi tool result sostituiti da un riassunto, `max_tokens` 1200, system prompt compatto. Le risposte dei marketplace sono in cache in memoria per 10 minuti (max 100 voci, solo risposte senza errore).
 

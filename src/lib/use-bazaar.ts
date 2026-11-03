@@ -179,6 +179,8 @@ export function useBazaar() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const abortRef = useRef<AbortController | null>(null);
   const statusRequestRef = useRef(false);
   const textBufferRef = useRef("");
@@ -467,7 +469,7 @@ export function useBazaar() {
             messages: history,
             model: settings.modelMode === "manual" ? settings.modelId : null,
             marketplaces: settings.enabledMarketplaces,
-            city: settings.city,
+            city: settingsRef.current.city.trim() || DEFAULT_SETTINGS.city,
             allowPaidFallback: options.allowPaidFallback ?? settings.allowPaidFallback,
           }),
           signal: controller.signal,
@@ -596,15 +598,14 @@ export function useBazaar() {
 
   const deleteConversation = useCallback(
     (id: string) => {
-      setConversations((prev) => {
-        const remaining = prev.filter((conversation) => conversation.id !== id);
-        if (activeId === id) {
-          setActiveId(remaining[0]?.id || null);
-        }
-        return remaining;
-      });
+      const remaining = conversations.filter((conversation) => conversation.id !== id);
+      if (activeId === id) {
+        abortRef.current?.abort();
+        setActiveId(remaining[0]?.id || null);
+      }
+      setConversations((prev) => prev.filter((conversation) => conversation.id !== id));
     },
-    [activeId],
+    [activeId, conversations],
   );
 
   const retryWithPaidFallback = useCallback(async () => {

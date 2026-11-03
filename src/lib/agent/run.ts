@@ -1,3 +1,4 @@
+import { explicitCityInText } from "@/lib/agent/city";
 import { buildSystemPrompt } from "@/lib/agent/prompt";
 import { getMcpManager } from "@/lib/mcp/manager";
 import { toolLabel } from "@/lib/mcp/config";
@@ -13,7 +14,7 @@ import {
   getPaidFallbackModel,
   resolveModel,
 } from "@/lib/openrouter/models";
-import { markCooldown } from "@/lib/openrouter/providers";
+import { COOLDOWN_LONG_MS, COOLDOWN_SHORT_MS, markCooldown } from "@/lib/openrouter/providers";
 import {
   streamChatCompletion,
   type OpenRouterMessage,
@@ -65,6 +66,7 @@ function prepareToolArguments(
   args: Record<string, unknown>,
   city: string,
   supportsJson: boolean,
+  hasCityParam: boolean,
 ): Record<string, unknown> {
   const prepared: Record<string, unknown> = { ...args };
 
@@ -72,8 +74,9 @@ function prepareToolArguments(
     const limit = Number(prepared.limit);
     prepared.limit = Number.isFinite(limit) ? Math.max(1, Math.min(10, Math.trunc(limit))) : 8;
   }
+  // La città (impostazioni, o quella nominata esplicitamente dall'utente) vince sempre su quella scelta dal modello.
+  if (hasCityParam || tool === "search_marketplace") prepared.city = city;
   if (tool === "search_marketplace") {
-    if (!prepared.city || typeof prepared.city !== "string") prepared.city = city;
     const radius = Number(prepared.radius_km);
     prepared.radius_km = Number.isFinite(radius) ? Math.max(1, Math.min(120, Math.trunc(radius))) : 30;
   }
@@ -91,13 +94,71 @@ function supportsJsonFormat(tools: OpenRouterTool[], toolName: string): boolean 
   return Boolean(properties && "format" in properties);
 }
 
+function supportsParam(tools: OpenRouterTool[], toolName: string, param: string): boolean {
+  const tool = tools.find((entry) => entry.function.name === toolName);
+  const properties = tool?.function.parameters?.properties as Record<string, unknown> | undefined;
+  return Boolean(properties && param in properties);
+}
+
+/** Accorcia descrizioni e proprietà dei tool: gli schemi vengono rimandati ad ogni round. */
+function compactTools(tools: OpenRouterTool[]): OpenRouterTool[] {
+  const shorten = (text: unknown, max: number): string | undefined => {
+    if (typeof text !== "string") return undefined;
+    const first = text.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s/)[0] || "";
+    return first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
+  };
+  const compactSchema = (schema: unknown, depth = 0): unknown => {
+    if (!schema || typeof schema !== "object") return schema;
+    if (Array.isArray(schema)) return schema.map((item) => compactSchema(item, depth + 1));
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+      if (key === "title" || key === "examples" || key === "$schema") continue;
+      if (key === "description") {
+        const text = shorten(value, 70);
+        if (text) out.description = text;
+        continue;
+      }
+      out[key] = key === "properties" && value && typeof value === "object"
+        ? Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).map(([name, prop]) => [
+              name,
+              compactSchema(prop, depth + 1),
+            ]),
+          )
+        : compactSchema(value, depth + 1);
+    }
+    return out;
+  };
+  return tools.map((tool) => ({
+    ...tool,
+    function: {
+      ...tool.function,
+      description: shorten(tool.function.description, 140) || tool.function.name,
+      parameters: compactSchema(tool.function.parameters) as Record<string, unknown>,
+    },
+  }));
+}
+
+function priceTag(model: FreeModel): string {
+  return model.pricePerMillion != null
+    ? ` · a pagamento ~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)}/1M token`
+    : " · a pagamento";
+}
+
 function shortModelLabel(model: FreeModel): string {
   const name = model.name
     .replace(/\s*\(free\)\s*/i, "")
     .replace(/^OpenRouter:\s*/i, "")
     .trim();
-  return `${name}${model.isPaid ? " · riserva" : " · free"}`;
+  return `${name}${model.isPaid ? priceTag(model) : " · free"}`;
 }
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+  });
 
 function isRetryableModelError(error: unknown): boolean {
   if (error instanceof OpenRouterError) {
@@ -144,21 +205,35 @@ async function callModelWithFallback(options: {
         options.emit({
           type: "notice",
           message: model.isPaid
-            ? `I modelli gratuiti sono saturi. Uso la riserva economica (${model.name})…`
+            ? `Nessun modello gratuito utilizzabile. Uso ${model.name} (a pagamento${
+                model.pricePerMillion != null ? `, ~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)} per 1M token` : ""
+              })…`
             : `Il modello precedente non è disponibile. Provo con ${model.name}…`,
         });
       }
-      const result = await streamChatCompletion({
-        target: model,
-        messages: options.messages,
-        tools: options.tools,
-        signal: options.signal,
-        onDelta: (delta) => {
-          emitted = true;
-          announceFallback();
-          options.emit({ type: "delta", text: delta });
-        },
-      });
+      let result: Awaited<ReturnType<typeof streamChatCompletion>> | null = null;
+      // Un breve retry sullo stesso modello su 429 prima di scartarlo.
+      for (let attempt = 0; attempt < 2 && !result; attempt += 1) {
+        try {
+          result = await streamChatCompletion({
+            target: model,
+            messages: options.messages,
+            tools: options.tools,
+            signal: options.signal,
+            onDelta: (delta) => {
+              emitted = true;
+              announceFallback();
+              options.emit({ type: "delta", text: delta });
+            },
+          });
+        } catch (error) {
+          const retry429 =
+            error instanceof OpenRouterError && error.status === 429 && !emitted && attempt === 0;
+          if (!retry429 || options.signal?.aborted) throw error;
+          await sleep(1500, options.signal);
+        }
+      }
+      if (!result) throw new OpenRouterError("Risposta vuota dal modello.", 502);
       if (
         result.discardedToolCallText &&
         !result.content.trim() &&
@@ -167,6 +242,7 @@ async function callModelWithFallback(options: {
         throw new OpenRouterError(
           "Il modello ha scritto una chiamata tool non valida. Provo un altro modello.",
           502,
+          "invalid_tool_call",
         );
       }
       announceFallback();
@@ -181,7 +257,16 @@ async function callModelWithFallback(options: {
     } catch (error) {
       lastError = error;
       if (options.signal?.aborted) throw error;
-      if (error instanceof OpenRouterError && error.status === 429) markCooldown(model.id);
+      if (error instanceof OpenRouterError) {
+        const systematic =
+          [400, 404].includes(error.status) || error.code === "invalid_tool_call";
+        console.warn(
+          `[bazaar] ${model.id} ha fallito (${error.status}${error.code ? `/${error.code}` : ""}): ${error.message.slice(0, 200)}${
+            systematic ? " -> cooldown lungo" : ""
+          }`,
+        );
+        markCooldown(model.id, systematic ? COOLDOWN_LONG_MS : COOLDOWN_SHORT_MS);
+      }
       if (emitted || !isRetryableModelError(error)) throw error;
     }
   }
@@ -202,7 +287,9 @@ export async function runAgent(options: {
     throw new Error("La richiesta non contiene un messaggio utente.");
   }
 
-  const city = (body.city || "Milano").trim() || "Milano";
+  const settingsCity = (body.city || "Milano").trim() || "Milano";
+  // La città delle Impostazioni vince, salvo che l'ultimo messaggio ne nomini esplicitamente un'altra.
+  const city = explicitCityInText(history[history.length - 1].content) || settingsCity;
   const requestedMarketplaces = Array.isArray(body.marketplaces)
     ? body.marketplaces.filter((id): id is MarketplaceId =>
         ["amazon", "aliexpress", "vinted", "subito", "facebook-marketplace"].includes(id),
@@ -232,7 +319,7 @@ export async function runAgent(options: {
     emit({ type: "notice", message: registry.note });
   }
 
-  const tools = manager.getOpenAiTools(online) as OpenRouterTool[];
+  const tools = compactTools(manager.getOpenAiTools(online) as OpenRouterTool[]);
   if (!tools.length) {
     throw new Error(
       "Nessun marketplace è connesso. Apri “Connessioni”, controlla i server MCP e riprova.",
@@ -341,6 +428,7 @@ export async function runAgent(options: {
           parseToolArguments(call.function.arguments),
           city,
           supportsJsonFormat(tools, resolved.tool),
+          supportsParam(tools, resolved.tool, "city"),
         );
         activity.args = args;
         emit({ type: "activity", activity: { ...activity, args } });

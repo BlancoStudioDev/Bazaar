@@ -145,14 +145,14 @@ export function ConnectionsDialog({
             );
           })}
         </div>
-        {enabled.includes("facebook-marketplace") ? (
+        {enabled.includes("facebook-marketplace") || enabled.includes("subito") ? (
           <label className="mt-3 flex items-center justify-between gap-4">
-            <span className="text-[13px] text-ink">Città per Facebook Marketplace</span>
+            <span className="text-[13px] text-ink">Città per Subito e Facebook</span>
             <input
               value={store.settings.city}
               onChange={(event) => store.updateSettings({ city: event.target.value })}
               onBlur={() => {
-                if (!store.settings.city.trim()) store.updateSettings({ city: "Milano" });
+                store.updateSettings({ city: store.settings.city.trim() || "Milano" });
               }}
               className="h-10 w-[140px] rounded-full border border-line bg-card px-4 text-[13px] text-ink outline-none transition focus:border-ink/50"
               placeholder="Milano"

@@ -1,4 +1,13 @@
 import type { MarketplaceId, Product } from "@/lib/types";
+import {
+  MIN_SAMPLE_FOR_MEDIAN,
+  median,
+  nonProductReason,
+  priceReason,
+  queryKey,
+  relevanceReason,
+  type DiscardReason,
+} from "@/lib/mcp/plausibility";
 import { formatPrice } from "@/lib/ui";
 
 export { formatPrice };
@@ -98,6 +107,125 @@ export interface ToolOutput {
   rawText: string;
   error?: string;
   total?: number;
+  /** Annunci scartati dai filtri di plausibilità (non vanno in Bacheca né al modello). */
+  discarded?: { count: number; reasons: Partial<Record<DiscardReason, number>> };
+}
+
+/** Massimo di annunci tenuti per singola chiamata di ricerca (uguale per ogni marketplace). */
+export const MAX_ITEMS_PER_CALL = 8;
+/** Massimo di annunci per marketplace nel JSON per il modello. */
+export const MAX_ITEMS_FOR_MODEL = 6;
+
+const FB_ITEM_BASE = "https://www.facebook.com/marketplace/item/";
+
+/** URL canonico dell'annuncio Facebook a partire dall'id numerico. */
+export function facebookItemUrl(id: string | null | undefined): string | null {
+  const clean = (id || "").trim();
+  return /^\d{6,}$/.test(clean) ? `${FB_ITEM_BASE}${clean}/` : null;
+}
+
+// Prezzi osservati per query (tra marketplace diversi) per la mediana di riferimento.
+const globalForPrices = globalThis as unknown as {
+  __bazaarPricePool?: Map<string, { at: number; prices: number[] }>;
+};
+const PRICE_POOL_TTL_MS = 15 * 60 * 1000;
+
+function pricePool() {
+  if (!globalForPrices.__bazaarPricePool) globalForPrices.__bazaarPricePool = new Map();
+  return globalForPrices.__bazaarPricePool;
+}
+
+function referenceMedian(key: string, ownPrices: number[]): number | null {
+  if (!key) return ownPrices.length >= MIN_SAMPLE_FOR_MEDIAN ? median(ownPrices) : null;
+  const pool = pricePool();
+  const now = Date.now();
+  for (const [poolKey, entry] of pool) {
+    if (now - entry.at > PRICE_POOL_TTL_MS) pool.delete(poolKey);
+  }
+  const entry = pool.get(key);
+  const prices = [...(entry?.prices ?? []), ...ownPrices].slice(-200);
+  pool.set(key, { at: now, prices });
+  return prices.length >= MIN_SAMPLE_FOR_MEDIAN ? median(prices) : null;
+}
+
+function queryFromRecord(record: Record<string, unknown>, args?: Record<string, unknown>): string {
+  const fromArgs = typeof args?.query === "string" ? args.query : "";
+  if (fromArgs.trim()) return fromArgs.trim();
+  if (typeof record.query === "string" && record.query.trim()) return record.query.trim();
+  if (typeof record.url === "string") {
+    try {
+      const q = new URL(record.url).searchParams.get("q");
+      if (q) return q;
+    } catch {
+      // ignore
+    }
+  }
+  return "";
+}
+
+/**
+ * Applica pertinenza, non-prodotti/accessori e prezzi sospetti. Restituisce prodotti e righe
+ * grezze allineate (con url/condizione normalizzati) così JSON modello e Bacheca coincidono.
+ */
+function curate(
+  server: MarketplaceId,
+  items: unknown[],
+  mapped: Array<Product | null>,
+  query: string,
+): { products: Product[]; rows: unknown[]; discarded: NonNullable<ToolOutput["discarded"]> } {
+  const reasons: Partial<Record<DiscardReason, number>> = {};
+  const drop = (reason: DiscardReason) => {
+    reasons[reason] = (reasons[reason] ?? 0) + 1;
+  };
+
+  type Entry = { product: Product; row: unknown };
+  const stage: Entry[] = [];
+  const seen = new Set<string>();
+  mapped.forEach((product, index) => {
+    if (!product) return;
+    const dedupeKey = product.url || product.key;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    if (query) {
+      const reason = nonProductReason(product.title, query) || relevanceReason(product.title, query);
+      if (reason) return drop(reason);
+    } else {
+      const reason = nonProductReason(product.title, "");
+      if (reason) return drop(reason);
+    }
+    if (server === "amazon" && product.price == null) return drop("senza_prezzo");
+    stage.push({ product, row: items[index] });
+  });
+
+  const key = queryKey(query);
+  const ownPrices = stage
+    .map((entry) => entry.product.price)
+    .filter((price): price is number => price != null && price > 0);
+  const reference = referenceMedian(key, ownPrices);
+
+  const kept: Entry[] = [];
+  for (const entry of stage) {
+    const reason = priceReason(entry.product.price, reference);
+    if (reason) {
+      drop(reason);
+      continue;
+    }
+    kept.push(entry);
+  }
+
+  const limited = kept.slice(0, MAX_ITEMS_PER_CALL);
+  const products = limited.map((entry) => ({ ...entry.product, query: query || entry.product.query || null }));
+  const rows = limited.map((entry) => {
+    const row = asRecord(entry.row);
+    if (!row) return entry.row;
+    return {
+      ...row,
+      url: entry.product.url,
+      ...(entry.product.condition ? { condizione: entry.product.condition } : {}),
+    };
+  });
+  const count = Object.values(reasons).reduce((sum, value) => sum + (value ?? 0), 0);
+  return { products, rows, discarded: { count, reasons } };
 }
 
 function parseJsonLoose(raw: string): unknown {
@@ -133,6 +261,7 @@ export function normalizeToolOutput(
   server: MarketplaceId,
   tool: string,
   rawText: string,
+  args?: Record<string, unknown>,
 ): ToolOutput {
   const trimmed = rawText.trim();
   if (!trimmed) {
@@ -172,114 +301,129 @@ export function normalizeToolOutput(
 
   let products: Product[] = [];
   let total: number | undefined;
+  let outData: Record<string, unknown> = record;
+  let discarded: ToolOutput["discarded"];
+  const query = queryFromRecord(record, args);
+
+  const finishSearch = (listKey: string, items: unknown[], mapped: Array<Product | null>) => {
+    const curated = curate(server, items, mapped, query);
+    products = curated.products;
+    discarded = curated.discarded;
+    outData = {
+      ...record,
+      [listKey]: curated.rows,
+      totale: curated.rows.length,
+      ...(curated.discarded.count ? { scartati_sospetti: curated.discarded.count } : {}),
+    };
+  };
 
   if (server === "amazon") {
     const items = asArray(record.risultati);
     total = typeof record.totale === "number" ? record.totale : items.length;
-    products = items
-      .map((item, index) => {
-        const row = asRecord(item);
-        if (!row) return null;
-        const url = safeUrl(row.url);
-        const id = text(row.asin) || idFromUrl(url, `amazon-${index}`);
-        const extras: Partial<Product> = {
-          image: imageUrl(row.immagine),
-          rating: num(row.valutazione),
-          reviews: typeof row.recensioni === "number" ? row.recensioni : null,
-          condition: "Nuovo",
-          location: null,
-          seller: "Amazon.it",
-          extra: row.sponsorizzato ? "Sponsorizzato" : null,
-        };
-        return makeProduct("amazon", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, extras);
-      })
-      .filter((item): item is Product => Boolean(item));
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.url);
+      const id = text(row.asin) || idFromUrl(url, `amazon-${index}`);
+      const title = text(row.titolo) || "";
+      const refurbished = /ricondizionat|refurbished|renewed|\busato\b/i.test(title);
+      const extras: Partial<Product> = {
+        image: imageUrl(row.immagine),
+        rating: num(row.valutazione),
+        reviews: typeof row.recensioni === "number" ? row.recensioni : null,
+        condition: refurbished ? "Ricondizionato" : "Nuovo",
+        location: null,
+        seller: "Amazon.it",
+        extra: row.sponsorizzato ? "Sponsorizzato" : null,
+      };
+      return makeProduct("amazon", id, title, text(row.prezzo), num(row.prezzo_num), url, extras);
+    });
+    finishSearch("risultati", items, mapped);
   } else if (server === "aliexpress") {
     const items = asArray(record.risultati);
     total = typeof record.totale === "number" ? record.totale : items.length;
-    products = items
-      .map((item, index) => {
-        const row = asRecord(item);
-        if (!row) return null;
-        const url = safeUrl(row.url);
-        const id = text(row.id) || idFromUrl(url, `ali-${index}`);
-        const notes = [
-          text(row.vendite),
-          row.spedizione_gratuita ? "Spedizione gratuita" : null,
-        ].filter(Boolean);
-        return makeProduct("aliexpress", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
-          image: imageUrl(row.immagine),
-          rating: num(row.valutazione),
-          condition: "Nuovo",
-          seller: "AliExpress",
-          extra: notes.length ? notes.join(" · ") : null,
-        });
-      })
-      .filter((item): item is Product => Boolean(item));
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.url);
+      const id = text(row.id) || idFromUrl(url, `ali-${index}`);
+      const notes = [
+        text(row.vendite),
+        row.spedizione_gratuita ? "Spedizione gratuita" : null,
+      ].filter(Boolean);
+      return makeProduct("aliexpress", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        rating: num(row.valutazione),
+        condition: "Nuovo",
+        seller: "AliExpress",
+        extra: notes.length ? notes.join(" · ") : null,
+      });
+    });
+    finishSearch("risultati", items, mapped);
   } else if (server === "vinted") {
     const items = asArray(record.risultati);
     total = typeof record.totale === "number" ? record.totale : items.length;
-    products = items
-      .map((item, index) => {
-        const row = asRecord(item);
-        if (!row) return null;
-        const url = safeUrl(row.url);
-        const id = text(row.id) || idFromUrl(url, `vinted-${index}`);
-        const notes = [
-          text(row.brand),
-          row.mi_piace ? `${row.mi_piace} mi piace` : null,
-          text(row.prezzo_totale) && text(row.prezzo_totale) !== text(row.prezzo)
-            ? `Con commissioni: ${text(row.prezzo_totale)}`
-            : null,
-        ].filter(Boolean);
-        return makeProduct("vinted", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
-          image: imageUrl(row.immagine),
-          condition: text(row.condizioni) || "Usato",
-          seller: "Venditore Vinted",
-          extra: notes.length ? notes.join(" · ") : null,
-        });
-      })
-      .filter((item): item is Product => Boolean(item));
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.url);
+      const id = text(row.id) || idFromUrl(url, `vinted-${index}`);
+      const notes = [
+        text(row.brand),
+        row.mi_piace ? `${row.mi_piace} mi piace` : null,
+        text(row.prezzo_totale) && text(row.prezzo_totale) !== text(row.prezzo)
+          ? `Con commissioni: ${text(row.prezzo_totale)}`
+          : null,
+      ].filter(Boolean);
+      return makeProduct("vinted", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        condition: text(row.condizioni) || "Usato",
+        seller: "Venditore Vinted",
+        extra: notes.length ? notes.join(" · ") : null,
+      });
+    });
+    finishSearch("risultati", items, mapped);
   } else if (server === "subito") {
     const items = asArray(record.risultati);
     total = typeof record.totale === "number" ? record.totale : items.length;
-    products = items
-      .map((item, index) => {
-        const row = asRecord(item);
-        if (!row) return null;
-        const url = safeUrl(row.link);
-        const id = idFromUrl(url, `subito-${index}`);
-        const date = text(row.data);
-        return makeProduct("subito", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo), url, {
-          condition: "Usato",
-          location: text(row.luogo),
-          seller: "Venditore Subito",
-          extra: date ? `Pubblicato: ${date.slice(0, 10)}` : null,
-        });
-      })
-      .filter((item): item is Product => Boolean(item));
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.link ?? row.url);
+      const id = idFromUrl(url, `subito-${index}`);
+      const date = text(row.data);
+      return makeProduct("subito", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo), url, {
+        condition: "Usato",
+        location: text(row.luogo),
+        seller: "Venditore Subito",
+        extra: date ? `Pubblicato: ${date.slice(0, 10)}` : null,
+      });
+    });
+    finishSearch("risultati", items, mapped);
   } else if (server === "facebook-marketplace") {
     const items = asArray(record.annunci);
     total = typeof record.totale === "number" ? record.totale : items.length;
-    products = items
-      .map((item, index) => {
-        const row = asRecord(item);
-        if (!row) return null;
-        const url = safeUrl(row.url);
-        const id = text(row.id) || idFromUrl(url, `fb-${index}`);
-        const status = text(row.stato);
-        return makeProduct("facebook-marketplace", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
-          image: imageUrl(row.immagine),
-          condition: text(row.condizione) || "Usato",
-          location: text(row.luogo),
-          seller: text(row.venditore),
-          extra: status && status !== "disponibile" ? `Stato: ${status}` : null,
-        });
-      })
-      .filter((item): item is Product => Boolean(item));
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const rawUrl = safeUrl(row.url);
+      const rawId = text(row.id) || text(row.listing_id) || (rawUrl.match(/\/marketplace\/item\/(\d+)/)?.[1] ?? "");
+      // Sempre l'URL diretto dell'annuncio: l'url grezzo può puntare alla pagina generica.
+      const url = facebookItemUrl(rawId) || (/\/marketplace\/item\/\d+/.test(rawUrl) ? rawUrl : "");
+      const status = text(row.stato);
+      return makeProduct("facebook-marketplace", rawId || `fb-${index}`, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        condition: text(row.condizione) || "Usato",
+        location: text(row.luogo),
+        seller: text(row.venditore),
+        extra: status && status !== "disponibile" ? `Stato: ${status}` : null,
+      });
+    });
+    finishSearch("annunci", items, mapped);
   } else if (tool.startsWith("get_")) {
     const detail = record;
-    const url = safeUrl(detail.url);
+    const url =
+      (server === "facebook-marketplace" && facebookItemUrl(text(detail.id))) || safeUrl(detail.url);
     const id = text(detail.asin) || text(detail.id) || idFromUrl(url, `${server}-detail`);
     const title = text(detail.titolo) || text(detail.title) || "";
     const price = num(detail.prezzo_num) ?? num(detail.prezzo) ?? num(detail.price);
@@ -296,10 +440,11 @@ export function normalizeToolOutput(
   }
 
   return {
-    data: record,
+    data: outData,
     products: dedupeProducts(products),
     rawText: trimmed,
     total,
+    discarded,
   };
 }
 
@@ -360,7 +505,7 @@ export function compactToolOutputForModel(
   server: MarketplaceId,
   tool: string,
   output: ToolOutput,
-  maxItems = 8,
+  maxItems = MAX_ITEMS_FOR_MODEL,
   maxChars = 6_000,
 ): string {
   const record = asRecord(output.data);
@@ -388,12 +533,13 @@ export function compactToolOutputForModel(
     return row ? essential(row, server) : item;
   });
 
-  let payload = JSON.stringify({ fonte: server, totale: record.totale ?? items.length, risultati: compactItems });
+  const extraNote = record.scartati_sospetti ? { scartati_sospetti: record.scartati_sospetti } : {};
+  let payload = JSON.stringify({ fonte: server, totale: record.totale ?? items.length, ...extraNote, risultati: compactItems });
   // Se supera il tetto, riduci gli item invece di troncare il JSON a metà.
   let keep = compactItems.length;
   while (payload.length > maxChars && keep > 1) {
     keep -= 1;
-    payload = JSON.stringify({ fonte: server, totale: record.totale ?? items.length, risultati: compactItems.slice(0, keep) });
+    payload = JSON.stringify({ fonte: server, totale: record.totale ?? items.length, ...extraNote, risultati: compactItems.slice(0, keep) });
   }
   return payload.slice(0, maxChars);
 }

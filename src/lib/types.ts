@@ -93,6 +93,8 @@ export interface FreeModel {
   isRouter?: boolean;
   isPaid?: boolean;
   pricingNote?: string;
+  /** Costo stimato in USD per 1M token (ingresso pesato 3:1) per i modelli a pagamento. */
+  pricePerMillion?: number;
   /** Provider diretto (groq, cerebras, gemini, mistral); assente = OpenRouter. */
   providerId?: string;
   baseUrl?: string;
@@ -102,6 +104,8 @@ export interface ModelRegistry {
   selected: FreeModel | null;
   models: FreeModel[];
   routerModel: FreeModel | null;
+  /** Tier economico a pagamento (opt-in), dal più economico. */
+  cheapModels?: FreeModel[];
   fetchedAt: number;
   source: "live" | "fallback";
   note?: string;

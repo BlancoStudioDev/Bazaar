@@ -113,6 +113,10 @@ export function apiModelName(model: FreeModel): string {
 // --- Cooldown in memoria per modelli che hanno risposto 429 -----------------
 
 const COOLDOWN_MS = 60_000;
+/** 429 persistente / errore temporaneo. */
+export const COOLDOWN_SHORT_MS = COOLDOWN_MS;
+/** Fallimento sistematico (404 data policy, 400, tool-call non valide): inutile riprovare a breve. */
+export const COOLDOWN_LONG_MS = 15 * 60_000;
 const globalForCooldown = globalThis as unknown as { __bazaarCooldown?: Map<string, number> };
 
 function cooldowns(): Map<string, number> {

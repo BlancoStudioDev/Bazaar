@@ -14,7 +14,13 @@ export interface McpServerConfig {
   args: string[];
   cwd: string;
   allowedTools: string[];
+  /** Timeout massimo di una singola chiamata tool (ms). */
+  toolTimeoutMs: number;
 }
+
+const DEFAULT_TOOL_TIMEOUT_MS = Number(process.env.MCP_TOOL_TIMEOUT_MS) || 20_000;
+// Facebook fa più richieste GraphQL e ha un rate limiter interno: se oltre 28 s è bloccato.
+const FACEBOOK_TOOL_TIMEOUT_MS = Number(process.env.MCP_TOOL_TIMEOUT_FACEBOOK_MS) || 28_000;
 
 const MCP_ROOT = (process.env.MCP_ROOT || path.join(os.homedir(), ".config", "opencode", "mcp")).replace(
   /^~(?=$|\/)/,
@@ -34,6 +40,7 @@ function server(
   python: string,
   dir: string,
   allowedTools: string[],
+  toolTimeoutMs = DEFAULT_TOOL_TIMEOUT_MS,
 ): McpServerConfig {
   const cwd = path.join(MCP_ROOT, dir);
   return {
@@ -45,6 +52,7 @@ function server(
     args: [path.join(cwd, "server.py")],
     cwd,
     allowedTools,
+    toolTimeoutMs,
   };
 }
 
@@ -65,7 +73,7 @@ export function getMcpServerConfigs(): McpServerConfig[] {
       "search_marketplace",
       "get_listing",
       "search_location",
-    ]),
+    ], FACEBOOK_TOOL_TIMEOUT_MS),
   ];
 
   return configs.filter((config) => !disabled.has(config.id));

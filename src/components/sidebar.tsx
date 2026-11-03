@@ -11,12 +11,14 @@ export function Sidebar({
   onNew,
   onOpenSettings,
   onClose,
+  onSelect,
   mobile = false,
 }: {
   store: BazaarStore;
   onNew: () => void;
   onOpenSettings: () => void;
   onClose?: () => void;
+  onSelect?: () => void;
   mobile?: boolean;
 }) {
   const groups = groupConversations(store.conversations);
@@ -75,7 +77,10 @@ export function Sidebar({
                     >
                       <button
                         type="button"
-                        onClick={() => store.selectConversation(conversation.id)}
+                        onClick={() => {
+                          store.selectConversation(conversation.id);
+                          onSelect?.();
+                        }}
                         aria-current={active ? "true" : undefined}
                         className="min-h-10 min-w-0 flex-1 px-3 py-2 text-left"
                       >

@@ -10,6 +10,7 @@ import {
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 18_000;
+const MAX_FREE_ATTEMPTS = 6;
 
 export class OpenRouterError extends Error {
   status: number;
@@ -133,6 +134,46 @@ function isFreeModel(model: RawModel): boolean {
 
 function supportsTools(model: RawModel): boolean {
   return Boolean(model.supported_parameters?.includes("tools"));
+}
+
+interface CatalogPrice {
+  /** USD per 1M token in ingresso. */
+  prompt: number;
+  /** USD per 1M token in uscita. */
+  completion: number;
+}
+
+const globalForPrices = globalThis as unknown as { __bazaarPrices?: Map<string, CatalogPrice> };
+
+function priceMap(): Map<string, CatalogPrice> {
+  if (!globalForPrices.__bazaarPrices) globalForPrices.__bazaarPrices = new Map();
+  return globalForPrices.__bazaarPrices;
+}
+
+function catalogPrice(model: RawModel): CatalogPrice | null {
+  const prompt = Number(model.pricing?.prompt);
+  const completion = Number(model.pricing?.completion);
+  if (!Number.isFinite(prompt) || !Number.isFinite(completion)) return null;
+  return { prompt: prompt * 1e6, completion: completion * 1e6 };
+}
+
+/** Costo stimato per 1M token: l'agente è dominato dal contesto in ingresso, quindi peso 3:1. */
+function blendedPrice(price: CatalogPrice): number {
+  return (price.prompt * 3 + price.completion) / 4;
+}
+
+function formatUsd(value: number): string {
+  return `$${value.toFixed(value < 0.1 ? 3 : 2).replace(".", ",")}`;
+}
+
+function paidLabels(price: CatalogPrice | null): { pricePerMillion?: number; pricingNote: string } {
+  if (!price) {
+    return { pricingNote: "Modello a pagamento (prezzo non disponibile nel catalogo)." };
+  }
+  return {
+    pricePerMillion: blendedPrice(price),
+    pricingNote: `A pagamento: ~${formatUsd(blendedPrice(price))} per 1M token (ingresso ${formatUsd(price.prompt)} · uscita ${formatUsd(price.completion)}).`,
+  };
 }
 
 function clamp(value: number, min = 0, max = 1): number {
@@ -283,20 +324,7 @@ function fallbackRegistry(note: string): ModelRegistry {
     scores,
     reason: reasonFor({ id, name, provider: "Phala", contextLength: 262_144, metrics, scores }),
   };
-  const router: FreeModel = {
-    id: "openrouter/free",
-    name: "Free Models Router",
-    provider: "OpenRouter",
-    contextLength: 200_000,
-    metrics: { latencyMs: null, throughput: null, uptime: null },
-    scores: scoreModel("openrouter/free", "Free Models Router", {
-      latencyMs: null,
-      throughput: null,
-      uptime: null,
-    }, true),
-    reason: "Router gratuito di OpenRouter: sceglie un modello free disponibile.",
-    isRouter: true,
-  };
+  const router = makeRouterModel();
   return {
     selected: model,
     models: [model],
@@ -305,6 +333,85 @@ function fallbackRegistry(note: string): ModelRegistry {
     source: "fallback",
     note,
   };
+}
+
+function makeRouterModel(raw?: RawModel | null): FreeModel {
+  const metrics: ModelMetrics = { latencyMs: null, throughput: null, uptime: null };
+  return {
+    id: "openrouter/free",
+    name: raw?.name || "Free Models Router",
+    provider: "OpenRouter",
+    contextLength: raw?.context_length || 200_000,
+    metrics,
+    scores: scoreModel("openrouter/free", "Free Models Router", metrics, true),
+    reason: "OpenRouter sceglie da solo un modello gratuito disponibile.",
+    isRouter: true,
+  };
+}
+
+const CHEAP_FAMILY = /gpt-oss|qwen|deepseek|gemini.*flash|llama|glm|mistral|gemma/i;
+const CHEAP_EXCLUDE = /:batch|:extended|:free|:thinking|^~|-vl\b|vision|ocr|embed|image|audio|guard|safety|moderation/i;
+const CHEAP_MIN_QUALITY = 68;
+const CHEAP_MIN_CONTEXT = 32_000;
+const CHEAP_TIER_SIZE = 3;
+
+function buildCheapModel(raw: RawModel): FreeModel {
+  const name = raw.name || raw.id;
+  const price = catalogPrice(raw);
+  const metrics: ModelMetrics = { latencyMs: null, throughput: null, uptime: null };
+  const intelligence = Math.round(intelligencePrior(raw.id, name) * 100);
+  const speed = Math.round(speedPrior(raw.id, name) * 100);
+  const labels = paidLabels(price);
+  return {
+    id: raw.id,
+    name,
+    provider: "OpenRouter · a pagamento",
+    contextLength: raw.context_length || 0,
+    description: raw.description,
+    metrics,
+    scores: {
+      intelligence,
+      speed,
+      reliability: 85,
+      overall: Math.round(intelligence * 0.5 + speed * 0.35 + 85 * 0.15),
+    },
+    reason: labels.pricePerMillion != null ? `A pagamento, ~${formatUsd(labels.pricePerMillion)} / 1M token.` : "A pagamento.",
+    isPaid: true,
+    ...labels,
+  };
+}
+
+/**
+ * Tier economico: OPENROUTER_CHEAP_MODELS (lista di id) oppure, di default, i modelli
+ * a pagamento con tool support più economici tra le famiglie note, scartando quelli
+ * sotto una soglia di qualità/contesto.
+ */
+function buildCheapTier(all: RawModel[]): FreeModel[] {
+  const configured = (process.env.OPENROUTER_CHEAP_MODELS || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (configured.length) {
+    return configured.map((id) => {
+      const raw = all.find((model) => model.id === id);
+      return buildCheapModel(raw || { id, name: id.split("/")[1] || id });
+    });
+  }
+  return all
+    .filter((model) => {
+      if (!supportsTools(model) || CHEAP_EXCLUDE.test(model.id)) return false;
+      if (model.architecture?.output_modalities && !model.architecture.output_modalities.includes("text")) {
+        return false;
+      }
+      const price = catalogPrice(model);
+      if (!price || price.prompt <= 0 || price.completion <= 0) return false;
+      if (!CHEAP_FAMILY.test(`${model.id} ${model.name || ""}`)) return false;
+      if ((model.context_length || 0) < CHEAP_MIN_CONTEXT) return false;
+      return Math.round(intelligencePrior(model.id, model.name || model.id) * 100) >= CHEAP_MIN_QUALITY;
+    })
+    .sort((a, b) => blendedPrice(catalogPrice(a)!) - blendedPrice(catalogPrice(b)!))
+    .slice(0, CHEAP_TIER_SIZE)
+    .map(buildCheapModel);
 }
 
 async function buildRegistry(): Promise<ModelRegistry> {
@@ -317,15 +424,24 @@ async function buildRegistry(): Promise<ModelRegistry> {
   }
 
   const all = payload.data || [];
+  const prices = priceMap();
+  for (const model of all) {
+    const price = catalogPrice(model);
+    if (price) prices.set(model.id, price);
+  }
+  const cheapModels = buildCheapTier(all);
   const routerRaw = all.find((model) => model.id === "openrouter/free");
   const candidates = all.filter(
     (model) => model.id !== "openrouter/free" && isFreeModel(model) && supportsTools(model),
   );
 
   if (!candidates.length) {
-    return fallbackRegistry(
-      "OpenRouter non espone modelli gratuiti compatibili con i tool. Uso il router free come riserva.",
-    );
+    return {
+      ...fallbackRegistry(
+        "OpenRouter non espone modelli gratuiti compatibili con i tool (spesso per le impostazioni di data policy dell'account). Uso il router free come riserva.",
+      ),
+      cheapModels,
+    };
   }
 
   const enriched = await mapWithConcurrency(candidates, 4, async (model) => {
@@ -346,27 +462,13 @@ async function buildRegistry(): Promise<ModelRegistry> {
 
   enriched.sort((a, b) => b.scores.overall - a.scores.overall);
 
-  const router: FreeModel | null = routerRaw
-    ? {
-        id: routerRaw.id,
-        name: routerRaw.name || "Free Models Router",
-        provider: "OpenRouter",
-        contextLength: routerRaw.context_length || 200_000,
-        metrics: { latencyMs: null, throughput: null, uptime: null },
-        scores: scoreModel(routerRaw.id, routerRaw.name || "Free Models Router", {
-          latencyMs: null,
-          throughput: null,
-          uptime: null,
-        }, true),
-        reason: "Router gratuito di OpenRouter: sceglie un modello free disponibile.",
-        isRouter: true,
-      }
-    : null;
+  const router: FreeModel = makeRouterModel(routerRaw);
 
   return {
     selected: enriched[0] || null,
     models: enriched,
     routerModel: router,
+    cheapModels,
     fetchedAt: Date.now(),
     source: "live",
   };
@@ -420,6 +522,7 @@ async function getOpenRouterRegistry(force = false): Promise<ModelRegistry> {
 
 export function getPaidFallbackModel(): FreeModel {
   const id = process.env.OPENROUTER_PAID_FALLBACK_MODEL || "deepseek/deepseek-v4.1-flash";
+  const labels = paidLabels(priceMap().get(id) || null);
   return {
     id,
     name: id.split("/")[1] || id,
@@ -427,10 +530,16 @@ export function getPaidFallbackModel(): FreeModel {
     contextLength: 128_000,
     metrics: { latencyMs: null, throughput: null, uptime: null },
     scores: { intelligence: 78, speed: 82, reliability: 92, overall: 82 },
-    reason: "Riserva economica usata solo se i modelli gratuiti non rispondono.",
+    reason: "Riserva a pagamento, usata solo dopo free e tier economico.",
     isPaid: true,
-    pricingNote: "Costo per token molto basso; attiva solo la riserva nelle impostazioni.",
+    ...labels,
   };
+}
+
+/** Tier economico configurato/dinamico; vuoto se il catalogo non è disponibile e non c'è OPENROUTER_CHEAP_MODELS. */
+export function getCheapTier(registry: ModelRegistry): FreeModel[] {
+  if (registry.cheapModels) return registry.cheapModels;
+  return buildCheapTier([]);
 }
 
 export async function resolveModel(
@@ -441,8 +550,8 @@ export async function resolveModel(
   if (!requestedId) {
     return { model: pickDefault(registry), registry };
   }
-  if (requestedId === registry.routerModel?.id && registry.routerModel) {
-    return { model: registry.routerModel, registry };
+  if (requestedId === "openrouter/free" && hasOpenRouterKey()) {
+    return { model: registry.routerModel || makeRouterModel(), registry };
   }
   const found = registry.models.find((model) => model.id === requestedId);
   if (found) return { model: found, registry };
@@ -480,13 +589,21 @@ export function getFallbackChain(
     seen.add(model.id);
     return true;
   });
-  // I modelli in cooldown (429 recente) vanno in fondo, non vengono scartati.
+  // Ordine: free pronti (max 6) -> [opt-in] tier economico (dal più economico) -> riserva fissa
+  // -> modelli in cooldown (di solito sistematicamente falliti) come ultima spiaggia.
   const ready = unique.filter((model) => !isCoolingDown(model.id));
   const cooling = unique.filter((model) => isCoolingDown(model.id));
-  const chain = [...ready, ...cooling];
+  const chain = ready.slice(0, MAX_FREE_ATTEMPTS);
   if (allowPaidFallback && hasOpenRouterKey()) {
-    chain.push(getPaidFallbackModel());
+    const paid = [...getCheapTier(registry), getPaidFallbackModel()];
+    const paidSeen = new Set<string>();
+    for (const model of paid) {
+      if (paidSeen.has(model.id) || isCoolingDown(model.id)) continue;
+      paidSeen.add(model.id);
+      chain.push(model);
+    }
   }
+  chain.push(...ready.slice(MAX_FREE_ATTEMPTS), ...cooling);
   return chain;
 }
 

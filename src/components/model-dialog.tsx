@@ -47,8 +47,13 @@ function ModelRow({
               {modelShortName(model.name)}
             </span>
             <span className="block truncate text-[12px] text-muted">
-              {model.provider} · {model.isRouter ? "router" : "gratuito"}
+              {model.provider} · {model.isRouter ? "router gratuito" : "gratuito"}
             </span>
+            {model.isRouter ? (
+              <span className="block text-[12px] text-muted">
+                OpenRouter sceglie da solo un modello gratuito disponibile.
+              </span>
+            ) : null}
           </span>
         </button>
         <button
@@ -96,6 +101,9 @@ export function ModelDialog({
   const selected = useMemo(() => {
     if (!registry) return null;
     if (autoSelected) return registry.selected;
+    if (registry.routerModel && store.settings.modelId === registry.routerModel.id) {
+      return registry.routerModel;
+    }
     return registry.models.find((model) => model.id === store.settings.modelId) || registry.selected;
   }, [autoSelected, registry, store.settings.modelId]);
 
@@ -170,6 +178,30 @@ export function ModelDialog({
               />
             ) : null}
           </ul>
+
+          {registry.cheapModels?.length ? (
+            <section className="mt-5">
+              <h3 className="text-[13px] font-medium text-ink">Se i gratuiti non bastano (a pagamento)</h3>
+              <p className="mt-1 text-[12px] text-muted">
+                Usati solo se attivi la riserva a pagamento nelle impostazioni, dal più economico. Costo stimato per 1M token.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {registry.cheapModels.map((model) => (
+                  <li
+                    key={model.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-2 text-[12px]"
+                  >
+                    <span className="min-w-0 truncate text-ink">{modelShortName(model.name)}</span>
+                    <span className="shrink-0 text-muted">
+                      {model.pricePerMillion != null
+                        ? `~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)} / 1M`
+                        : "prezzo n/d"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           {onBack ? (
             <button type="button" onClick={onBack} className="btn-quiet mt-4">

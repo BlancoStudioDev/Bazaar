@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 import { MARKETPLACES, MARKETPLACE_IDS } from "@/lib/marketplaces";
+import { dropSuspiciousPrices } from "@/lib/mcp/plausibility";
 import { ProductCard } from "@/components/product-card";
 import { MarketplaceDot, Spinner } from "@/components/ui";
 import type { BazaarStore } from "@/lib/use-bazaar";
@@ -21,7 +22,8 @@ function collectProducts(store: BazaarStore): Product[] {
       if (!map.has(key)) map.set(key, product);
     }
   }
-  return Array.from(map.values());
+  // Rete di sicurezza: prodotti salvati prima del filtro server con prezzi irrisori.
+  return dropSuspiciousPrices(Array.from(map.values()));
 }
 
 export function ResultsBoard({

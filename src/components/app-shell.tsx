@@ -25,6 +25,7 @@ function countProducts(store: BazaarStore): number {
 
 export function AppShell({ store }: { store: BazaarStore }) {
   const [mobileSidebar, setMobileSidebar] = useState(false);
+  const [desktopSidebar, setDesktopSidebar] = useState(true);
   const [mobileResults, setMobileResults] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -63,7 +64,7 @@ export function AppShell({ store }: { store: BazaarStore }) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-paper">
-      <div className="hidden lg:flex">
+      <div className={cn("hidden", desktopSidebar && "lg:flex")}>
         <Sidebar
           store={store}
           onNew={() => {
@@ -90,6 +91,7 @@ export function AppShell({ store }: { store: BazaarStore }) {
                 store.newConversation();
                 setMobileSidebar(false);
               }}
+              onSelect={() => setMobileSidebar(false)}
               onOpenSettings={() => {
                 setMobileSidebar(false);
                 setSettingsOpen(true);
@@ -107,6 +109,15 @@ export function AppShell({ store }: { store: BazaarStore }) {
             onClick={() => setMobileSidebar(true)}
             className="icon-btn lg:hidden"
             aria-label="Apri la cronologia"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setDesktopSidebar((value) => !value)}
+            className="icon-btn hidden lg:inline-flex"
+            aria-label={desktopSidebar ? "Nascondi la cronologia" : "Mostra la cronologia"}
+            aria-expanded={desktopSidebar}
           >
             <Menu className="h-4 w-4" />
           </button>

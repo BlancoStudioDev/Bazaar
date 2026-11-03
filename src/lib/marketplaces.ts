@@ -67,3 +67,18 @@ export const MARKETPLACE_ORDER: MarketplaceId[] = [
 ];
 
 export const MARKETPLACE_IDS = MARKETPLACE_ORDER;
+
+/** Link da aprire per un prodotto: per Facebook ricostruisce l'URL diretto dell'annuncio dall'id. */
+export function productHref(product: {
+  marketplace: MarketplaceId;
+  id: string;
+  url: string;
+}): string {
+  if (product.marketplace === "facebook-marketplace") {
+    const id = /^\d{6,}$/.test(product.id)
+      ? product.id
+      : product.url.match(/\/marketplace\/item\/(\d+)/)?.[1];
+    if (id) return `https://www.facebook.com/marketplace/item/${id}/`;
+  }
+  return product.url;
+}

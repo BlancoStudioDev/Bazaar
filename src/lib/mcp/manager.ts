@@ -40,7 +40,6 @@ export interface ToolCallResult {
 }
 
 const CONNECT_TIMEOUT_MS = 25_000;
-const TOOL_TIMEOUT_MS = 90_000;
 const RETRY_COOLDOWN_MS = 20_000;
 
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -386,7 +385,8 @@ class McpManager {
     const cached = readResultCache(key);
     if (cached) return { ...cached, durationMs: 0 };
     const result = await this.callToolUncached(server, tool, args);
-    if (!result.isError) writeResultCache(key, result);
+    // Le risposte vuote non si cachano: spesso sono blocchi temporanei del marketplace.
+    if (!result.isError && !/"(?:totale|total)":\s*0\b/.test(result.text)) writeResultCache(key, result);
     return result;
   }
 
@@ -416,12 +416,29 @@ class McpManager {
       ? Object.fromEntries(Object.entries(args).filter(([key]) => allowedKeys.has(key)))
       : args;
 
+    const timeoutMs = runtime.config.toolTimeoutMs;
+    const label = runtime.config.label;
+    const callArgs = this.prepareArgs(server, tool, sanitizedArgs);
+
     try {
-      const result = await runtime.client.callTool(
-        { name: tool, arguments: sanitizedArgs },
-        undefined,
-        { timeout: TOOL_TIMEOUT_MS },
-      );
+      let result;
+      try {
+        result = await runtime.client.callTool(
+          { name: tool, arguments: callArgs },
+          undefined,
+          { timeout: timeoutMs, resetTimeoutOnProgress: false },
+        );
+      } catch (error) {
+        if (!this.isTransportError(error)) throw error;
+        // Un solo retry se il processo MCP è caduto: riconnetto e riprovo.
+        const reconnected = await this.ensure(server, true);
+        if (!reconnected || !runtime.client) throw error;
+        result = await runtime.client.callTool(
+          { name: tool, arguments: callArgs },
+          undefined,
+          { timeout: timeoutMs, resetTimeoutOnProgress: false },
+        );
+      }
       runtime.lastUsed = Date.now();
 
       const content = Array.isArray(result.content) ? result.content : [];
@@ -456,6 +473,18 @@ class McpManager {
         durationMs: Date.now() - started,
       };
     } catch (error) {
+      if (this.isTimeoutError(error)) {
+        // Il server è probabilmente bloccato (es. rate limiter interno): lo riavvio in background
+        // così la prossima ricerca non resta in coda dietro quella appena scaduta.
+        void this.recycle(runtime);
+        return {
+          text: JSON.stringify({
+            errore: `${label} non ha risposto entro ${Math.round(timeoutMs / 1000)} s: nessun risultato da questa fonte, riprova più tardi o usa le altre.`,
+          }),
+          isError: true,
+          durationMs: Date.now() - started,
+        };
+      }
       const message = error instanceof Error ? error.message : String(error);
       return {
         text: JSON.stringify({ errore: `${tool}: ${message}` }),
@@ -463,6 +492,36 @@ class McpManager {
         durationMs: Date.now() - started,
       };
     }
+  }
+
+  /** Alcuni server restituiscono pagine non pertinenti: ne chiedo di più e filtro in normalize. */
+  private prepareArgs(
+    server: MarketplaceId,
+    tool: string,
+    args: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (server === "amazon" && tool === "search_amazon") {
+      const limit = Number(args.limit);
+      const wanted = Number.isFinite(limit) ? limit : 8;
+      return { ...args, limit: Math.min(30, Math.max(wanted * 3, 20)) };
+    }
+    return args;
+  }
+
+  private isTimeoutError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /timed out|timeout/i.test(message) || (error as { code?: number })?.code === -32001;
+  }
+
+  private isTransportError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /connection closed|not connected|EPIPE|transport/i.test(message) && !this.isTimeoutError(error);
+  }
+
+  private async recycle(runtime: ServerRuntime) {
+    await this.disconnect(runtime);
+    runtime.status = "idle";
+    runtime.error = undefined;
   }
 
   async closeAll() {

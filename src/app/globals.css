@@ -709,6 +709,7 @@
   opacity: 0.5;
 }
 
+@layer components {
 .icon-btn {
   display: inline-flex;
   height: 40px;
@@ -728,4 +729,5 @@
 .icon-btn:hover {
   border-color: color-mix(in srgb, var(--color-ink) 30%, transparent);
   color: var(--color-ink);
+}
 }
