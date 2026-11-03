@@ -122,7 +122,7 @@ const STOPWORDS = new Set([
   "misura", "uomo", "donna", "bambino", "bambina", "vendita", "cerco",
 ]);
 
-const VARIANT_WORDS = ["pro", "max", "plus", "ultra", "mini", "lite", "fe"];
+const VARIANT_WORDS = ["pro", "max", "plus", "ultra", "mini", "lite", "fe", "super", "ti"];
 const SIZE_QUERY = /\b(?:scarpe|scarpa|sneaker|sneakers|stivali|taglia|misura|numero|size|pantaloni|jeans|giacca|felpa|maglia|abito|vestito)\b/;
 
 function hasToken(titleTokens: Set<string>, normalizedTitle: string, token: string): boolean {

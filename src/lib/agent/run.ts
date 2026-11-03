@@ -342,6 +342,7 @@ export async function runAgent(options: {
   let totalUsage: ChatUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   let modelUsed = initialModel;
   let anyText = false;
+  let foundProducts = 0;
 
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
     const result = await callModelWithFallback({
@@ -349,7 +350,9 @@ export async function runAgent(options: {
       registry,
       allowPaidFallback,
       messages,
-      tools,
+      // Dopo il primo giro con risultati sufficienti il modello deve solo rispondere:
+      // un secondo giro di raffinamento costa token e spesso torna a 0.
+      tools: round > 0 && foundProducts >= 3 ? [] : tools,
       signal,
       emit,
     });
@@ -460,6 +463,10 @@ export async function runAgent(options: {
     );
 
     for (const execution of executions) {
+      foundProducts += execution.products.length;
+      console.log(
+        `[bazaar] ${execution.call.function.name} ${execution.call.function.arguments.slice(0, 160)} -> ${execution.products.length}`,
+      );
       messages.push({
         role: "tool",
         tool_call_id: execution.call.id,
