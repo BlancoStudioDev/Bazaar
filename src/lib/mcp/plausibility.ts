@@ -154,6 +154,18 @@ export function relevanceReason(title: string, query: string): DiscardReason | n
   const digitTokens = queryTokens.filter((token) => /\d/.test(token));
   for (const token of digitTokens) {
     if (sizeQuery && /^\d{2}$/.test(token) && Number(token) >= 28 && Number(token) <= 52) continue;
+    // Codici lettere+cifre (r3, s24): spesso gli annunci li omettono. Scarto solo se il titolo
+    // riporta un codice DIVERSO con lo stesso prefisso (r4 al posto di r3), non se manca.
+    const code = token.match(/^([a-z]+)(\d+)$/);
+    if (code && !/^(?:\d+)(?:gb|tb|mb)$/.test(token)) {
+      if (hasToken(titleTokens, normalizedTitle, token)) continue;
+      const other = [...titleTokens].some((t) => {
+        const m = t.match(/^([a-z]+)(\d+)$/);
+        return Boolean(m) && m![1] === code[1] && m![2] !== code[2];
+      });
+      if (other) return "non_pertinente";
+      continue;
+    }
     if (!hasToken(titleTokens, normalizedTitle, token)) return "non_pertinente";
   }
 

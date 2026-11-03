@@ -80,8 +80,9 @@ function prepareToolArguments(
   }
 
   if (tool.startsWith("search_")) {
-    const limit = Number(prepared.limit);
-    prepared.limit = Number.isFinite(limit) ? Math.max(1, Math.min(10, Math.trunc(limit))) : 8;
+    // Il limite scelto dal modello non conta: chiedere più annunci al server non costa token
+    // (al modello ne arrivano comunque pochi) ma dà alla Bacheca e ai filtri più materiale.
+    prepared.limit = 24;
   }
   // La città (impostazioni, o quella nominata esplicitamente dall'utente) vince sempre su quella scelta dal modello.
   if (hasCityParam || tool === "search_marketplace") prepared.city = city;

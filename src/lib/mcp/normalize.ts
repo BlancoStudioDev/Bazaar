@@ -112,7 +112,7 @@ export interface ToolOutput {
 }
 
 /** Massimo di annunci tenuti per singola chiamata di ricerca (uguale per ogni marketplace). */
-export const MAX_ITEMS_PER_CALL = 8;
+export const MAX_ITEMS_PER_CALL = 20;
 /** Massimo di annunci per marketplace nel JSON per il modello. */
 export const MAX_ITEMS_FOR_MODEL = 6;
 
