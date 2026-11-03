@@ -7,6 +7,7 @@ import type { ClientUser } from "@/components/home-client";
 import { authClient } from "@/lib/auth/client";
 
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
+import { withBasePath } from "@/lib/base-path";
 import type { BazaarStore } from "@/lib/use-bazaar";
 import { cn, groupConversations, relativeTime } from "@/lib/ui";
 
@@ -33,7 +34,7 @@ export function Sidebar({
     try {
       await authClient.signOut();
     } finally {
-      window.location.assign("/login");
+      window.location.assign(withBasePath("/login"));
     }
   };
   const groups = groupConversations(store.conversations);

@@ -13,6 +13,7 @@ import type {
   ToolActivity,
 } from "@/lib/types";
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
+import { apiPath } from "@/lib/base-path";
 import { conversationTitle, uid } from "@/lib/ui";
 
 const LEGACY_CONVERSATIONS_KEY = "bazaar.conversations.v1";
@@ -253,7 +254,7 @@ export function useBazaar(userId: string) {
     setModelsLoading(true);
     setModelsError(null);
     try {
-      const response = await fetch(`/api/models${force ? "?refresh=1" : ""}`, {
+      const response = await fetch(apiPath(`/api/models${force ? "?refresh=1" : ""}`), {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -274,7 +275,7 @@ export function useBazaar(userId: string) {
     setStatusLoading(true);
     setStatusError(null);
     try {
-      const response = await fetch("/api/status", { cache: "no-store" });
+      const response = await fetch(apiPath("/api/status"), { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = (await response.json()) as ConnectionStatus;
       setStatus(payload);
@@ -295,7 +296,7 @@ export function useBazaar(userId: string) {
       setStatusLoading(true);
       setStatusError(null);
       try {
-        const response = await fetch("/api/status", {
+        const response = await fetch(apiPath("/api/status"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "reconnect", server }),
@@ -482,7 +483,7 @@ export function useBazaar(userId: string) {
       };
 
       try {
-        const response = await fetch("/api/chat", {
+        const response = await fetch(apiPath("/api/chat"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -6,7 +6,7 @@ import { APIError } from "better-auth/api";
 import { genericOAuth } from "better-auth/plugins";
 import Database from "better-sqlite3";
 
-import { getAuthConfig, isEmailAllowed } from "./config";
+import { COOKIE_PREFIX, getAuthConfig, isEmailAllowed } from "./config";
 
 function createAuth() {
   const config = getAuthConfig();
@@ -26,8 +26,10 @@ function createAuth() {
 
   return betterAuth({
     appName: "Bazaar",
+    // baseURL = solo origine pubblica (https://blancostudio.dev); il sotto-percorso sta in basePath.
+    // Callback OAuth risultante: {origine}{APP_BASE_PATH}/api/auth/callback/onionrings
     baseURL: config.baseURL,
-    basePath: "/api/auth",
+    basePath: `${config.basePath}/api/auth`,
     secret: config.secret,
     trustedOrigins: [config.baseURL],
     database: db,
@@ -36,9 +38,16 @@ function createAuth() {
     session: { expiresIn: 60 * 60 * 24 * 14, updateAge: 60 * 60 * 24 },
     advanced: {
       useSecureCookies: config.secureCookies,
-      defaultCookieAttributes: { httpOnly: true, sameSite: "lax", secure: config.secureCookies },
+      // Prefisso univoco e path limitato al basePath: niente collisioni con altri siti su blancostudio.dev.
+      cookiePrefix: COOKIE_PREFIX,
+      defaultCookieAttributes: {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: config.secureCookies,
+        path: config.basePath || "/",
+      },
     },
-    onAPIError: { errorURL: `${config.baseURL}/login` },
+    onAPIError: { errorURL: `${config.baseURL}${config.basePath}/login` },
     databaseHooks: {
       user: {
         create: {

@@ -3,21 +3,20 @@
 # Nessuna password nello script: usa chiave SSH / ssh-agent (se serve, ssh la chiede da solo).
 #
 # Uso:
-#   DEPLOY_HOST=blancostudio.dev DEPLOY_USER=blanco05 APP_DOMAIN=bazaar.blancostudio.dev \
-#     ./deploy/deploy.sh [--dry-run] [--install-unit] [--skip-mcp] [--skip-build]
+#   DEPLOY_HOST=blancostudio.dev ./deploy/deploy.sh [--dry-run] [--install-unit] [--skip-mcp] [--skip-build]
 #
 # Variabili:
 #   DEPLOY_HOST   (obbligatoria) host SSH
 #   DEPLOY_USER   (default: blanco05)
 #   DEPLOY_PATH   (default: /home/$DEPLOY_USER/bazaar)  -> app/, mcp/, data/, .env.production
-#   APP_DOMAIN    (obbligatoria con --install-unit)
+#   APP_PORT      (default: 3210) porta locale dell'app, dietro Apache
 #   MCP_SRC       (default: ~/.config/opencode/mcp) sorgente locale dei server MCP
 #   SSH_OPTS      opzioni extra per ssh (es. "-i ~/.ssh/id_ed25519_bazaar -p 22")
 #   PYTHON_BIN    (default: python3) interprete sul server per creare i venv (>= 3.10)
 #
 # Opzioni:
 #   --dry-run       stampa soltanto cosa farebbe (rsync -n, nessuna esecuzione via ssh)
-#   --install-unit  installa/aggiorna anche unit systemd e vhost nginx (richiede sudo sul server)
+#   --install-unit  installa/aggiorna il servizio systemd UTENTE (nessun sudo). Apache va configurato a mano: deploy/README.md
 #   --skip-mcp      non sincronizza né installa i server MCP
 #   --skip-build    salta npm ci / build (solo sync + restart)
 set -euo pipefail
@@ -40,8 +39,7 @@ DEPLOY_PATH="${DEPLOY_PATH:-/home/${DEPLOY_USER}/bazaar}"
 MCP_SRC="${MCP_SRC:-$HOME/.config/opencode/mcp}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 SSH_OPTS="${SSH_OPTS:-}"
-APP_DOMAIN="${APP_DOMAIN:-}"
-if [ "$INSTALL_UNIT" = 1 ]; then : "${APP_DOMAIN:?--install-unit richiede APP_DOMAIN}"; fi
+APP_PORT="${APP_PORT:-3210}"
 
 case "$DEPLOY_PATH" in /?*) ;; *) echo "DEPLOY_PATH deve essere un percorso assoluto non radice" >&2; exit 2 ;; esac
 case "$DEPLOY_PATH" in *[[:space:]\"\'\$\`\\]*) echo "DEPLOY_PATH contiene caratteri non ammessi" >&2; exit 2 ;; esac
@@ -126,33 +124,29 @@ if [ "$SKIP_MCP" = 0 ]; then
 fi
 
 if [ "$INSTALL_UNIT" = 1 ]; then
-  say "Installo unit systemd e vhost nginx (sudo sul server)"
-  TMP_UNIT="$(mktemp)"; TMP_NGINX="$(mktemp)"; trap 'rm -f "$TMP_UNIT" "$TMP_NGINX"' EXIT
-  sed -e "s#@DEPLOY_PATH@#${DEPLOY_PATH}#g" -e "s#@DEPLOY_USER@#${DEPLOY_USER}#g" "$HERE/bazaar.service" > "$TMP_UNIT"
-  sed -e "s#@APP_DOMAIN@#${APP_DOMAIN}#g" "$HERE/nginx.conf" > "$TMP_NGINX"
+  say "Installo il servizio systemd utente (~/.config/systemd/user/bazaar.service)"
+  TMP_UNIT="$(mktemp)"; trap 'rm -f "$TMP_UNIT"' EXIT
+  sed -e "s#@DEPLOY_PATH@#${DEPLOY_PATH}#g" -e "s#@PORT@#${APP_PORT}#g" "$HERE/bazaar.user.service" > "$TMP_UNIT"
   if [ "$DRY_RUN" = 1 ]; then
-    echo "[dry-run] scp unit -> /tmp/bazaar.service ; vhost -> /tmp/bazaar.nginx.conf"
+    echo "[dry-run] scp unit -> ~/.config/systemd/user/bazaar.service"
   else
     # shellcheck disable=SC2086
-    scp $SSH_OPTS "$TMP_UNIT" "$REMOTE:/tmp/bazaar.service"
+    "${SSH_CMD[@]}" "$REMOTE" 'mkdir -p ~/.config/systemd/user'
     # shellcheck disable=SC2086
-    scp $SSH_OPTS "$TMP_NGINX" "$REMOTE:/tmp/bazaar.nginx.conf"
+    scp $SSH_OPTS "$TMP_UNIT" "$REMOTE:.config/systemd/user/bazaar.service"
   fi
-  run_ssh -t <<SCRIPT
+  run_ssh <<SCRIPT
 set -euo pipefail
-sudo install -m 644 /tmp/bazaar.service /etc/systemd/system/bazaar.service
-sudo install -m 644 /tmp/bazaar.nginx.conf /etc/nginx/sites-available/${APP_DOMAIN}
-sudo ln -sf /etc/nginx/sites-available/${APP_DOMAIN} /etc/nginx/sites-enabled/${APP_DOMAIN}
-rm -f /tmp/bazaar.service /tmp/bazaar.nginx.conf
-sudo systemctl daemon-reload
-sudo systemctl enable bazaar
-echo "Unit installata. Il vhost nginx NON e' ricaricato qui: segui deploy/README.md (certbot prima del reload)."
+systemctl --user daemon-reload
+systemctl --user enable bazaar
+echo "Servizio installato (non ancora avviato: parte dopo build e migrazione)."
 SCRIPT
 fi
 
 say "Dipendenze, build, venv MCP, migrazione e restart (via ssh)"
-run_ssh -t <<SCRIPT
+run_ssh <<SCRIPT
 set -euo pipefail
+export PATH="\$HOME/node22/bin:\$PATH"   # Node 22: quella di sistema e' la 18
 APP="$DEPLOY_PATH/app"; MCP="$DEPLOY_PATH/mcp"; ENVF="$DEPLOY_PATH/.env.production"
 
 if [ ! -f "\$ENVF" ]; then
@@ -200,16 +194,17 @@ else
   echo "--> auth:migrate non presente in package.json: salto"
 fi
 
-if systemctl cat bazaar >/dev/null 2>&1; then
-  echo "--> restart bazaar.service"
-  sudo systemctl restart bazaar
-  sleep 2
-  sudo systemctl --no-pager --lines=5 status bazaar || true
+if systemctl --user cat bazaar >/dev/null 2>&1; then
+  echo "--> restart bazaar.service (utente)"
+  systemctl --user restart bazaar
+  sleep 3
+  systemctl --user --no-pager --lines=8 status bazaar || true
+  curl -s -o /dev/null -w "locale: http://127.0.0.1:${APP_PORT}${APP_BASE_PATH:-}/login -> %{http_code}\\n" "http://127.0.0.1:${APP_PORT}\${APP_BASE_PATH:-}/login" || true
 else
-  echo "ATTENZIONE: bazaar.service non installata. Rilancia con --install-unit o segui deploy/README.md."
+  echo "ATTENZIONE: bazaar.service non installata. Rilancia con --install-unit."
 fi
 SCRIPT
 
-say "Fatto${APP_DOMAIN:+. Verifica: https://$APP_DOMAIN}"
+say "Fatto. Se non lo hai ancora fatto, aggiungi lo snippet Apache (deploy/apache-bazaar.conf): vedi deploy/README.md"
 [ "$DRY_RUN" = 1 ] && echo "(dry-run: non e' stato modificato nulla)"
 exit 0

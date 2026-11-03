@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Spinner } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 import { safeCallbackPath } from "@/lib/auth/redirect";
+import { withBasePath } from "@/lib/base-path";
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_allowed:
@@ -44,8 +45,11 @@ export function LoginForm({ callbackURL, error }: { callbackURL: string; error: 
     try {
       const result = await authClient.signIn.social({
         provider: "onionrings",
-        callbackURL: target,
-        errorCallbackURL: target === "/" ? "/login" : `/login?callbackURL=${encodeURIComponent(target)}`,
+        // Better Auth non conosce il basePath di Next: i path di ritorno vanno prefissati a mano.
+        callbackURL: withBasePath(target),
+        errorCallbackURL: withBasePath(
+          target === "/" ? "/login" : `/login?callbackURL=${encodeURIComponent(target)}`,
+        ),
       });
       if (result?.error) {
         setLocalError(ERROR_MESSAGES.provider_unavailable);

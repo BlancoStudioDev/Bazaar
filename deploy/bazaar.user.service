@@ -1,0 +1,32 @@
+# ~/.config/systemd/user/bazaar.service  (servizio UTENTE: niente sudo)
+# I segnaposto @DEPLOY_PATH@ e @PORT@ sono sostituiti da deploy.sh --install-unit.
+[Unit]
+Description=Bazaar (Next.js + server MCP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@DEPLOY_PATH@/app
+# Contiene i segreti (chmod 600). Mai nel repo.
+EnvironmentFile=@DEPLOY_PATH@/.env.production
+Environment=NODE_ENV=production
+# Node di sistema e' la 18; Next 16 richiede >= 20.9: uso la 22 in ~/node22.
+Environment=PATH=%h/node22/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/node22/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p @PORT@
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+# I server MCP sono processi figli: li termina tutti allo stop.
+KillMode=control-group
+TimeoutStopSec=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=@DEPLOY_PATH@/data @DEPLOY_PATH@/mcp @DEPLOY_PATH@/app/.next
+
+[Install]
+WantedBy=default.target

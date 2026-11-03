@@ -1,17 +1,25 @@
 /**
- * Configurazione dell'autenticazione (solo server). Mai variabili NEXT_PUBLIC_*.
+ * Configurazione dell'autenticazione (solo server). Nessun segreto in NEXT_PUBLIC_* (l'unica è
+ * NEXT_PUBLIC_BASE_PATH, non segreta).
  * La validazione è lazy (alla prima chiamata, e all'avvio tramite instrumentation.ts)
  * così `next build` non richiede i segreti.
  */
 
+import { BASE_PATH } from "@/lib/base-path";
+
 export const DEFAULT_ISSUER = "https://auth.onionrings.dev/api/auth";
 export const LOCAL_USER_ID = "local";
+/** Prefisso cookie Better Auth, univoco per non collidere con altre app sullo stesso dominio. */
+export const COOKIE_PREFIX = "bazaar";
 
 export type AuthConfig =
   | { mode: "disabled" }
   | {
       mode: "enabled";
+      /** Solo origine pubblica (es. https://blancostudio.dev), senza basePath. */
       baseURL: string;
+      /** Sotto-percorso dell'app (APP_BASE_PATH, es. "/bazaar"); "" = radice. */
+      basePath: string;
       secret: string;
       issuer: string;
       clientId: string;
@@ -68,6 +76,7 @@ export function getAuthConfig(): AuthConfig {
     return cached;
   }
 
+  // BETTER_AUTH_URL = origine pubblica (https://blancostudio.dev); APP_BASE_PATH (/bazaar) è separato.
   const baseURL = clean(process.env.BETTER_AUTH_URL).replace(/\/+$/, "");
   const secret = clean(process.env.BETTER_AUTH_SECRET);
   const issuer = (clean(process.env.ONIONRINGS_ISSUER) || DEFAULT_ISSUER).replace(/\/+$/, "");
@@ -92,10 +101,12 @@ export function getAuthConfig(): AuthConfig {
   try {
     url = new URL(baseURL);
   } catch {
-    throw new Error("[auth] BETTER_AUTH_URL non è un URL valido (es. https://bazaar.example.com).");
+    throw new Error("[auth] BETTER_AUTH_URL non è un URL valido (es. https://blancostudio.dev).");
   }
   if (url.pathname !== "/" || url.search || url.hash) {
-    throw new Error("[auth] BETTER_AUTH_URL deve essere solo l'origine (schema, host, porta), senza path.");
+    throw new Error(
+      "[auth] BETTER_AUTH_URL deve essere solo l'origine pubblica (es. https://blancostudio.dev), senza path: il sotto-percorso (/bazaar) va in APP_BASE_PATH.",
+    );
   }
   if (prod && url.protocol !== "https:" && !LOOPBACK.has(url.hostname)) {
     throw new Error("[auth] In produzione BETTER_AUTH_URL deve usare HTTPS.");
@@ -115,6 +126,7 @@ export function getAuthConfig(): AuthConfig {
   cached = {
     mode: "enabled",
     baseURL: url.origin,
+    basePath: BASE_PATH,
     secret,
     issuer,
     clientId,
