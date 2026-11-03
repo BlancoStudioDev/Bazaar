@@ -3,7 +3,7 @@
 # Aggiunge /bazaar al vhost 443 di blancostudio.dev, con backup e ripristino automatico se configtest fallisce.
 set -euo pipefail
 
-CONF=/etc/apache2/sites-available/blancostudio.dev-le-ssl.conf
+CONF=/etc/apache2/sites-enabled/blancostudio.dev-le-ssl.conf   # file REALE letto da Apache (non e' un link a sites-available)
 SNIPPET=/home/blanco05/bazaar/apache-bazaar.conf
 BACKUP="$CONF.bak-bazaar"
 LINE="    Include $SNIPPET"
