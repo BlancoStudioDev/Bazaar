@@ -33,8 +33,9 @@ TOOL
 - Per ogni richiesta di prodotto fai almeno una ricerca reale (search_amazon, search_aliexpress, search_vinted, search_subito, search_marketplace).
 - Passa format: "json" se supportato e limit 8 (mai oltre 10).
 - Per i tool con parametro city usa SEMPRE city: "${options.city}" (non sceglierne un'altra) e radius_km: 30 per Facebook Marketplace.
-- Per "il più economico" cerca su almeno 3 marketplace con sort: "prezzo_crescente" quando c'è; confronta prezzo_num.
-- Più ricerche nello stesso turno (sono parallele). Non ripetere la stessa query.
+- Per confrontare prezzi cerca su TUTTI i marketplace attivi nello stesso turno (sono parallele e non costano token extra). Non saltarne nessuno.
+- Query corta: solo marca e modello (es. "RTX 4070"), senza parole generiche come "scheda video". Per Amazon NON usare sort "prezzo_crescente" (porta risultati non pertinenti); per gli altri è ok. Confronta prezzo_num.
+- Non ripetere la stessa query. Se un marketplace dà timeout o è sospeso, NON riprovarlo: segnalalo e usa gli altri.
 - get_product / get_item / get_listing solo per il dettaglio di un prodotto specifico.
 - Se un tool dà errore, prova gli altri e citalo brevemente. Niente tool di scrittura o monitoraggio.
 

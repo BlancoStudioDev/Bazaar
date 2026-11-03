@@ -131,6 +131,11 @@ function hasToken(titleTokens: Set<string>, normalizedTitle: string, token: stri
   if (/^\d+$/.test(token)) {
     return new RegExp(`(?<![a-z0-9])${token}(?![0-9])`).test(normalizedTitle);
   }
+  // Capacità: "12gb" deve combaciare con "12G", "12 GB", "12gb".
+  const unit = token.match(/^(\d+)(gb|tb|mb)$/);
+  if (unit) {
+    return new RegExp(`(?<![0-9a-z])${unit[1]}\\s?${unit[2][0]}b?(?![a-z0-9])`).test(normalizedTitle);
+  }
   return false;
 }
 
@@ -163,13 +168,15 @@ export function relevanceReason(title: string, query: string): DiscardReason | n
   const words = queryTokens.filter(
     (token) => token.length >= 4 && !/\d/.test(token) && !STOPWORDS.has(token),
   );
-  if (words.length) {
+  // Con un numero di modello nella query l'identità è già verificata dalle cifre:
+  // parole generiche come "scheda video" non devono scartare risultati validi.
+  if (words.length && !digitTokens.length) {
     const matched = words.filter((word) => {
       if (titleTokens.has(word)) return true;
       const stem = word.slice(0, Math.max(4, word.length - 2));
       return normalizedTitle.includes(stem);
     });
-    if (matched.length === 0 || matched.length / words.length < 0.5) return "non_pertinente";
+    if (matched.length === 0 || matched.length / words.length < 0.34) return "non_pertinente";
   }
   return null;
 }

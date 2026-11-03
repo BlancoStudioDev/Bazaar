@@ -91,6 +91,10 @@ function writeResultCache(key: string, value: ToolCallResult) {
   }
 }
 
+/** Dopo un timeout il server è sospeso per qualche minuto: evita che il modello ritenti a vuoto. */
+const SERVER_COOLDOWN_MS = 5 * 60_000;
+const serverCooldown = new Map<MarketplaceId, number>();
+
 class McpManager {
   private servers = new Map<MarketplaceId, ServerRuntime>();
   private connecting = new Map<MarketplaceId, Promise<void>>();
@@ -384,7 +388,23 @@ class McpManager {
     const key = resultCacheKey(server, tool, args);
     const cached = readResultCache(key);
     if (cached) return { ...cached, durationMs: 0 };
+    const blockedUntil = serverCooldown.get(server) ?? 0;
+    if (Date.now() < blockedUntil) {
+      const minutes = Math.max(1, Math.ceil((blockedUntil - Date.now()) / 60_000));
+      return {
+        text: JSON.stringify({
+          errore: `${server} non risponde ed è sospeso per ~${minutes} min. NON riprovare: usa gli altri marketplace e segnala il problema all'utente.`,
+        }),
+        isError: true,
+        durationMs: 0,
+      };
+    }
     const result = await this.callToolUncached(server, tool, args);
+    if (result.isError && /timeout|timed out|non risponde|non è disponibile/i.test(result.text)) {
+      serverCooldown.set(server, Date.now() + SERVER_COOLDOWN_MS);
+    } else if (!result.isError) {
+      serverCooldown.delete(server);
+    }
     // Le risposte vuote non si cachano: spesso sono blocchi temporanei del marketplace.
     if (!result.isError && !/"(?:totale|total)":\s*0\b/.test(result.text)) writeResultCache(key, result);
     return result;
