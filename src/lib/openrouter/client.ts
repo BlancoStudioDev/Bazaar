@@ -27,6 +27,8 @@ export interface OpenRouterTool {
 }
 
 export interface StreamChatOptions {
+  /** "required" obbliga il modello a chiamare almeno un tool. */
+  toolChoice?: "auto" | "required";
   /** Modello completo (provider diretto o OpenRouter). */
   target: FreeModel;
   messages: OpenRouterMessage[];
@@ -297,8 +299,11 @@ export async function streamChatCompletion(
   };
   if (tools?.length) {
     body.tools = tools;
-    body.tool_choice = "auto";
+    body.tool_choice = options.toolChoice ?? "auto";
   }
+  // Il ragionamento nascosto consuma token (fino a 8x la risposta) e può lasciare la risposta vuota:
+  // per ricerche e confronti non serve.
+  if (!provider) body.reasoning = { enabled: false };
 
   const endpoint = provider
     ? `${provider.baseUrl}/chat/completions`

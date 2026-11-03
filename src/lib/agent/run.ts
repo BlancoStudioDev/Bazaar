@@ -69,6 +69,14 @@ function prepareToolArguments(
   hasCityParam: boolean,
 ): Record<string, unknown> {
   const prepared: Record<string, unknown> = { ...args };
+  // I modelli piccoli riempiono i parametri opzionali con segnaposto ("n/d", "null"...):
+  // un url="n/d" fa ignorare la query. Meglio non passarli affatto.
+  for (const [key, value] of Object.entries(prepared)) {
+    if (value === null || value === undefined) delete prepared[key];
+    else if (typeof value === "string" && /^\s*(?:|n\/?d|n\/?a|null|none|undefined|nan|-+)\s*$/i.test(value)) {
+      delete prepared[key];
+    }
+  }
 
   if (tool.startsWith("search_")) {
     const limit = Number(prepared.limit);
@@ -173,6 +181,7 @@ async function callModelWithFallback(options: {
   allowPaidFallback: boolean;
   messages: OpenRouterMessage[];
   tools: OpenRouterTool[];
+  toolChoice?: "auto" | "required";
   signal?: AbortSignal;
   emit: (event: AgentEvent) => void;
 }): Promise<{
@@ -219,6 +228,7 @@ async function callModelWithFallback(options: {
             target: model,
             messages: options.messages,
             tools: options.tools,
+            toolChoice: options.toolChoice,
             signal: options.signal,
             onDelta: (delta) => {
               emitted = true;
@@ -243,6 +253,13 @@ async function callModelWithFallback(options: {
           "Il modello ha scritto una chiamata tool non valida. Provo un altro modello.",
           502,
           "invalid_tool_call",
+        );
+      }
+      if (!result.content.trim() && !result.toolCalls.length && !emitted) {
+        throw new OpenRouterError(
+          "Il modello ha risposto a vuoto. Provo un altro modello.",
+          502,
+          "empty_response",
         );
       }
       announceFallback();
@@ -353,6 +370,8 @@ export async function runAgent(options: {
       // Dopo il primo giro con risultati sufficienti il modello deve solo rispondere:
       // un secondo giro di raffinamento costa token e spesso torna a 0.
       tools: round > 0 && foundProducts >= 3 ? [] : tools,
+      // Primo messaggio della conversazione: una ricerca reale è obbligatoria, niente prezzi inventati.
+      toolChoice: round === 0 && history.length <= 1 ? "required" : "auto",
       signal,
       emit,
     });
@@ -367,6 +386,30 @@ export async function runAgent(options: {
     if (result.content.trim()) anyText = true;
 
     const toolCalls = result.toolCalls.slice(0, MAX_TOOL_CALLS_PER_ROUND);
+    if (round === 0) {
+      // I modelli piccoli saltano spesso dei marketplace: copro io quelli attivi rimasti
+      // con la stessa query (le ricerche sono parallele e gratuite, pesano solo nel contesto).
+      const searched = new Set(toolCalls.map((call) => manager.resolveTool(call.function.name)?.server));
+      const first = toolCalls.find((call) => manager.resolveTool(call.function.name)?.tool.startsWith("search_"));
+      const query = first ? parseToolArguments(first.function.arguments).query : null;
+      if (typeof query === "string" && query.trim()) {
+        for (const server of online) {
+          if (searched.has(server) || toolCalls.length >= MAX_TOOL_CALLS_PER_ROUND) continue;
+          const name = tools
+            .map((tool) => tool.function.name)
+            .find((n) => {
+              const resolved = manager.resolveTool(n);
+              return resolved?.server === server && resolved.tool.startsWith("search_");
+            });
+          if (!name) continue;
+          toolCalls.push({
+            id: `call_auto_${server}_${Date.now()}`,
+            type: "function",
+            function: { name, arguments: JSON.stringify({ query: query.trim() }) },
+          });
+        }
+      }
+    }
     if (!toolCalls.length) {
       if (!result.content.trim() && !anyText) {
         throw new Error("Il modello non ha prodotto una risposta. Riprova con una richiesta più specifica.");
@@ -461,6 +504,15 @@ export async function runAgent(options: {
         };
       }),
     );
+
+    const priced = executions
+      .flatMap((execution) => execution.products)
+      .filter((product) => typeof product.price === "number" && product.price > 0);
+    const cheapest = priced.sort((a, b) => (a.price as number) - (b.price as number))[0];
+    if (cheapest) {
+      const last = executions[executions.length - 1];
+      last.modelContent += `\n[Riepilogo calcolato: prezzo numerico più basso tra tutti i risultati = ${cheapest.price} € — "${cheapest.title.slice(0, 80)}" su ${cheapest.marketplace}]`;
+    }
 
     for (const execution of executions) {
       foundProducts += execution.products.length;
