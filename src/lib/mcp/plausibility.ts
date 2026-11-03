@@ -122,7 +122,6 @@ const STOPWORDS = new Set([
   "misura", "uomo", "donna", "bambino", "bambina", "vendita", "cerco",
 ]);
 
-const VARIANT_WORDS = ["pro", "max", "plus", "ultra", "mini", "lite", "fe"];
 const SIZE_QUERY = /\b(?:scarpe|scarpa|sneaker|sneakers|stivali|taglia|misura|numero|size|pantaloni|jeans|giacca|felpa|maglia|abito|vestito)\b/;
 
 function hasToken(titleTokens: Set<string>, normalizedTitle: string, token: string): boolean {
@@ -141,8 +140,8 @@ function hasToken(titleTokens: Set<string>, normalizedTitle: string, token: stri
 
 /**
  * Pertinenza: i token con cifre della query (modello, capacità) devono comparire nel titolo
- * e le varianti (Pro, Max, Plus...) non richieste non devono comparire; almeno metà delle
- * parole significative deve essere presente.
+ * ; senza cifre, almeno un terzo delle parole significative deve essere presente.
+ * Nessuna lista di varianti: Pro/Super/Ti ecc. restano e le distingue il modello.
  */
 export function relevanceReason(title: string, query: string): DiscardReason | null {
   const queryTokens = tokens(query);
@@ -156,13 +155,6 @@ export function relevanceReason(title: string, query: string): DiscardReason | n
   for (const token of digitTokens) {
     if (sizeQuery && /^\d{2}$/.test(token) && Number(token) >= 28 && Number(token) <= 52) continue;
     if (!hasToken(titleTokens, normalizedTitle, token)) return "non_pertinente";
-  }
-
-  if (digitTokens.length) {
-    const queryHas = new Set(queryTokens);
-    for (const variant of VARIANT_WORDS) {
-      if (titleTokens.has(variant) && !queryHas.has(variant)) return "non_pertinente";
-    }
   }
 
   const words = queryTokens.filter(
