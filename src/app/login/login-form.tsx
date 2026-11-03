@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { Logo } from "@/components/brand/logo";
+import { Mascot } from "@/components/brand/mascot";
 import { Spinner } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 import { safeCallbackPath } from "@/lib/auth/redirect";
@@ -65,8 +67,14 @@ export function LoginForm({ callbackURL, error }: { callbackURL: string; error: 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-paper px-6 py-12">
       <div className="w-full max-w-[380px]">
-        <h1 className="font-serif text-[56px] leading-none text-ink">Bazaar</h1>
-        <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
+        <Mascot mood="idle" size={148} animated />
+        <h1 className="mt-6">
+          <Logo variant="word" tone="dark" size={48} />
+        </h1>
+        <p className="mt-3 font-serif text-[24px] italic leading-[1.1] tracking-[-0.01em] text-ink-2">
+          Il fiuto giusto per ogni affare.
+        </p>
+        <p className="mt-4 text-[15px] leading-relaxed text-ink-2">
           Il tuo personal shopper: confronta prezzi reali su più marketplace in un'unica chat.
         </p>
 

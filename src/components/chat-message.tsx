@@ -11,7 +11,9 @@ import {
   WifiOff,
 } from "lucide-react";
 
+import { MascotBadge } from "@/components/brand/mascot";
 import { ActivityTimeline } from "@/components/activity-timeline";
+import { ThemedStatus, useStatusPhrase } from "@/components/brand/themed-status";
 import { Markdown } from "@/components/markdown";
 import { ProductStrip } from "@/components/product-card";
 import { Spinner } from "@/components/ui";
@@ -58,6 +60,13 @@ export function ChatMessage({
   const products = message.products || [];
   const notices = message.notices || [];
   const hasContent = Boolean(message.content.trim());
+  const startPhrase = useStatusPhrase({
+    messageId: message.id,
+    startedAt: message.createdAt,
+    activities,
+    hasText: hasContent,
+    active: streaming && !activities.length,
+  });
   const showFallbackAction =
     message.status === "error" &&
     store.modelRegistry?.paidFallbackAvailable &&
@@ -88,9 +97,7 @@ export function ChatMessage({
   return (
     <div className="animate-fade-up">
       <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-paper">
-          <Sparkles className="h-3 w-3" />
-        </span>
+        <MascotBadge size={28} animated={streaming} />
         <span className="text-[13px] font-semibold text-ink">Bazaar</span>
         {message.isFallback ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
@@ -100,7 +107,13 @@ export function ChatMessage({
       </div>
 
       <div className="sm:pl-8">
-        <ActivityTimeline activities={activities} streaming={streaming} />
+        <ActivityTimeline
+          activities={activities}
+          streaming={streaming}
+          messageId={message.id}
+          startedAt={message.createdAt}
+          hasText={hasContent}
+        />
 
         {notices.length ? (
           <div className="mb-4 space-y-1">
@@ -115,20 +128,8 @@ export function ChatMessage({
 
         {hasContent ? (
           <Markdown streaming={streaming}>{message.content}</Markdown>
-        ) : streaming ? (
-          <div className="flex items-center gap-2 py-2 text-[13px] text-muted">
-            <Spinner className="h-4 w-4 text-accent" />
-            <span>
-              {activities.some((activity) => activity.status === "running")
-                ? "Sto cercando tra i marketplace"
-                : "Sto mettendo insieme i risultati"}
-              <span className="dots" aria-hidden>
-                <span>.</span>
-                <span>.</span>
-                <span>.</span>
-              </span>
-            </span>
-          </div>
+        ) : streaming && !activities.length ? (
+          <ThemedStatus phrase={startPhrase} />
         ) : null}
 
         {products.length ? (

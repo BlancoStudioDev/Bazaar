@@ -7,6 +7,8 @@ import { MARKETPLACES } from "@/lib/marketplaces";
 import type { ToolActivity } from "@/lib/types";
 import { cn, formatDuration, marketplaceName } from "@/lib/ui";
 import { Spinner } from "@/components/ui";
+import { useStatusPhrase } from "@/components/brand/themed-status";
+import { summaryPhrase } from "@/lib/brand/phrases";
 
 function ActivityRow({ activity }: { activity: ToolActivity }) {
   const meta = MARKETPLACES[activity.server as keyof typeof MARKETPLACES];
@@ -44,11 +46,18 @@ function ActivityRow({ activity }: { activity: ToolActivity }) {
 export function ActivityTimeline({
   activities,
   streaming,
+  messageId,
+  startedAt,
+  hasText = false,
 }: {
   activities: ToolActivity[];
   streaming: boolean;
+  messageId: string;
+  startedAt: number;
+  hasText?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const livePhrase = useStatusPhrase({ messageId, startedAt, activities, hasText, active: streaming });
   const stats = useMemo(() => {
     const servers = new Set(activities.map((activity) => activity.server));
     const errors = activities.filter((activity) => activity.status === "error").length;
@@ -61,15 +70,9 @@ export function ActivityTimeline({
 
   if (!activities.length) return null;
 
-  const running = activities.some((activity) => activity.status === "running");
-  const sourcesLabel = `${stats.sources} marketplace`;
   const summary = streaming
-    ? running
-      ? `Cerco su ${sourcesLabel}…`
-      : "Confronto i risultati…"
-    : `Cercato su ${sourcesLabel} · ${stats.results} ${stats.results === 1 ? "risultato" : "risultati"}${
-        stats.errors ? ` · ${stats.errors} non ${stats.errors === 1 ? "riuscita" : "riuscite"}` : ""
-      }`;
+    ? livePhrase
+    : `${summaryPhrase({ sources: stats.sources, products: stats.results, failed: stats.errors })}`;
   const names = Array.from(new Set(activities.map((activity) => marketplaceName(activity.server))));
 
   return (
@@ -82,7 +85,7 @@ export function ActivityTimeline({
         title={names.join(", ")}
       >
         {streaming ? <Spinner className="h-4 w-4 shrink-0 text-accent" /> : null}
-        <span className="truncate">{summary}</span>
+        <span key={streaming ? summary : "done"} className={cn("truncate", streaming && "fx-phrase")}>{summary}</span>
         <ChevronDown
           className={cn("h-4 w-4 shrink-0 transition", open && "rotate-180")}
           aria-hidden

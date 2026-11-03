@@ -2,6 +2,7 @@
 
 import { ArrowUpRight, WifiOff } from "lucide-react";
 
+import { Mascot } from "@/components/brand/mascot";
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
 import type { BazaarStore } from "@/lib/use-bazaar";
 
@@ -36,6 +37,14 @@ export function Welcome({
 
   return (
     <div className="welcome">
+      <div className="mb-6 flex items-end gap-4 sm:gap-5">
+        <Mascot mood="sniff" size={132} animated className="h-auto w-[104px] sm:w-[132px]" />
+        <p className="pb-2 font-serif text-[20px] italic leading-[1.15] tracking-[-0.01em] text-ink-2 sm:text-[24px]">
+          Il fiuto giusto
+          <br />
+          per ogni affare.
+        </p>
+      </div>
       <h1 className="welcome-title">
         Dimmi cosa cerchi.
         <br />

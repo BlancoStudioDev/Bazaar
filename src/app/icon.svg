@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .fur { fill: #171512; }
+    @media (prefers-color-scheme: dark) { .fur { fill: #f6f1e7; } }
+  </style>
+  <path class="fur" fill-rule="evenodd" d="M3 0.5 L14 14.3 Q16 14 18 14.3 L29 0.5 L25.8 19.4 L28.2 22.4 L23.4 22.6 Q21 27.5 16 30.4 Q11 27.5 8.6 22.6 L3.8 22.4 L6.2 19.4 Z M5 6 L11.4 13.8 L7 16.6 Z M27 6 L20.6 13.8 L25 16.6 Z M9.9 19 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 Z M19.1 19 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 Z"/>
+  <circle cx="16" cy="25.4" r="2.3" fill="#e8451f"/>
+</svg>

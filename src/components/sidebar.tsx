@@ -3,6 +3,7 @@
 import { LogOut, Plus, Settings2, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
+import { Logo } from "@/components/brand/logo";
 import type { ClientUser } from "@/components/home-client";
 import { authClient } from "@/lib/auth/client";
 
@@ -45,12 +46,7 @@ export function Sidebar({
   return (
     <aside className={cn("sidebar", mobile && "is-mobile")}>
       <div className="flex items-center justify-between gap-4 px-4 pb-4 pt-6">
-        <div className="flex items-baseline gap-1">
-          <span className="font-serif text-[32px] leading-none tracking-[-0.03em] text-sidebar-ink">
-            bazaar
-          </span>
-          <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
-        </div>
+        <Logo tone="light" size={32} />
         {onClose ? (
           <button
             type="button"

@@ -1,3 +1,4 @@
+import { TOOL_LABELS } from "@/lib/brand/phrases";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -101,20 +102,7 @@ export function missingServerFiles(config: McpServerConfig): string | null {
 }
 
 export function toolLabel(server: string, tool: string): string {
-  const labels: Record<string, string> = {
-    search_amazon: "Cerco su Amazon",
-    get_product: "Apro la scheda Amazon",
-    search_ebay: "Cerco su eBay",
-    get_ebay_item: "Apro l'annuncio eBay",
-    search_aliexpress: "Cerco su AliExpress",
-    search_vinted: "Cerco su Vinted",
-    get_item: "Apro l'annuncio Vinted",
-    search_subito: "Cerco su Subito",
-    search_marketplace: "Cerco su Facebook Marketplace",
-    get_listing: "Apro l'annuncio Facebook",
-    search_location: "Cerco la località",
-  };
-  return labels[tool] || `${server} · ${tool}`;
+  return TOOL_LABELS[tool] || `${server} · ${tool}`;
 }
 
 export function isSearchTool(tool: string): boolean {

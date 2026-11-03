@@ -239,7 +239,7 @@ async function callModelWithFallback(options: {
             ? `Nessun modello gratuito utilizzabile. Uso ${model.name} (a pagamento${
                 model.pricePerMillion != null ? `, ~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)} per 1M token` : ""
               })…`
-            : `Il modello precedente non è disponibile. Provo con ${model.name}…`,
+            : `Fiuto cambia strada: il modello precedente non risponde, provo con ${model.name}…`,
         });
       }
       let result: Awaited<ReturnType<typeof streamChatCompletion>> | null = null;
@@ -663,7 +663,7 @@ export async function runAgent(options: {
     if (round === MAX_ROUNDS - 1) {
       emit({
         type: "notice",
-        message: "Ho raggiunto il limite di ricerche per questa risposta. Concludo con i dati raccolti.",
+        message: "Fiuto ha fatto abbastanza giri per questa risposta: concludo con quello che ho trovato.",
       });
     }
   }

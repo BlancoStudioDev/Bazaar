@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
+import { Logo } from "@/components/brand/logo";
+import { Mascot, MascotBadge } from "@/components/brand/mascot";
 import { SharedBoard } from "@/app/s/[token]/shared-board";
 import { SharedMarkdown } from "@/app/s/[token]/shared-markdown";
 import type { ShareSnapshot } from "@/lib/share/snapshot";
@@ -16,7 +18,7 @@ export function SharedChat({ snapshot, sharedAt }: { snapshot: ShareSnapshot; sh
     <div className="min-h-dvh bg-paper">
       <header className="sticky top-0 z-20 border-b border-line bg-paper/95 backdrop-blur-sm">
         <div className="mx-auto flex h-16 w-full max-w-[760px] items-center justify-between gap-3 px-4 sm:px-6">
-          <span className="font-serif text-[26px] leading-none tracking-[-0.02em] text-ink">Bazaar</span>
+          <Logo tone="dark" size={30} />
           <div className="flex items-center gap-2">
             <SharedBoard products={products} />
             <Link href="/login" className="btn-quiet">
@@ -50,9 +52,7 @@ export function SharedChat({ snapshot, sharedAt }: { snapshot: ShareSnapshot; sh
             ) : (
               <div key={index}>
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-paper">
-                    <Sparkles className="h-3 w-3" aria-hidden />
-                  </span>
+                  <MascotBadge size={28} />
                   <span className="text-[13px] font-semibold text-ink">Bazaar</span>
                 </div>
                 <div className="sm:pl-8">
@@ -67,7 +67,9 @@ export function SharedChat({ snapshot, sharedAt }: { snapshot: ShareSnapshot; sh
           Chat condivisa · sola lettura · i prezzi possono essere cambiati. Verifica sempre sull&apos;annuncio.
         </p>
 
-        <section className="mt-8 rounded-2xl border border-line bg-card px-5 py-6 sm:px-6">
+        <section className="mt-8 flex flex-col gap-4 rounded-2xl border border-line bg-card px-5 py-6 sm:flex-row sm:items-center sm:gap-6 sm:px-6">
+          <Mascot mood="happy" size={112} animated className="sm:order-2" />
+          <div className="min-w-0 flex-1">
           <h2 className="font-serif text-[28px] leading-[1.05] tracking-[-0.02em] text-ink">
             Cerca anche tu, <span className="italic text-accent">senza girare i marketplace</span>
           </h2>
@@ -78,6 +80,7 @@ export function SharedChat({ snapshot, sharedAt }: { snapshot: ShareSnapshot; sh
             Cerca anche tu su Bazaar
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
+          </div>
         </section>
       </main>
     </div>

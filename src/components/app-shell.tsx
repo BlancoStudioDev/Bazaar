@@ -7,6 +7,7 @@ import { ChatView } from "@/components/chat-view";
 import { ConnectionsDialog } from "@/components/connections-dialog";
 import { ModelDialog } from "@/components/model-dialog";
 import { ResultsBoard } from "@/components/results-board";
+import { Logo } from "@/components/brand/logo";
 import { Sidebar } from "@/components/sidebar";
 import { SharePopover } from "@/components/share-popover";
 import type { ClientUser } from "@/components/home-client";
@@ -116,6 +117,9 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
           >
             <Menu className="h-4 w-4" />
           </button>
+          <span className="mx-1 flex lg:hidden">
+            <Logo variant="mark" tone="dark" size={28} />
+          </span>
           <button
             type="button"
             onClick={() => setDesktopSidebar((value) => !value)}

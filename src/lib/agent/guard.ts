@@ -14,13 +14,13 @@ export interface GuardVerdict {
 
 export const REFUSALS: Record<GuardCategory, string> = {
   fuori_tema:
-    "Posso aiutarti solo a cercare e confrontare prodotti sui marketplace (Amazon, eBay, AliExpress, Vinted, Subito, Facebook Marketplace). Dimmi cosa vorresti comprare, per esempio «una RTX 4070 usata a Milano».",
+    "Qui Fiuto fa una cosa sola, ma la fa bene: annusare affari sui marketplace (Amazon, AliExpress, Vinted, Subito, Facebook Marketplace). Dimmi cosa vorresti comprare, per esempio «una RTX 4070 usata a Milano».",
   illegale:
-    "Non posso aiutarti con questa richiesta. Posso cercare prodotti legali sui marketplace: dimmi cosa ti serve.",
-  abuso: "Non posso rispondere a questo messaggio. Se vuoi, scrivimi che prodotto cerchi e lo confronto per te.",
+    "Questa bancarella Fiuto non la frequenta. Posso però cercare prodotti in regola: dimmi cosa ti serve.",
+  abuso: "Meglio rimettere il naso sugli affari. Scrivimi che prodotto cerchi e lo confronto per te.",
   injection:
-    "Non posso modificare il mio funzionamento né mostrare le mie istruzioni. Posso però cercare un prodotto per te: dimmi cosa ti serve.",
-  troppo_lungo: `Il messaggio è troppo lungo (massimo ${MAX_REQUEST_CHARS} caratteri). Descrivi il prodotto che cerchi in poche righe.`,
+    "Le istruzioni del bazar restano nel retrobottega: non le cambio e non le mostro. Posso però cercare un prodotto per te, dimmi cosa ti serve.",
+  troppo_lungo: `Messaggio troppo lungo per il banco (massimo ${MAX_REQUEST_CHARS} caratteri). Descrivi il prodotto che cerchi in poche righe.`,
 };
 
 // Tentativi evidenti di manipolare l'assistente: bloccati senza spendere una chiamata al modello.
