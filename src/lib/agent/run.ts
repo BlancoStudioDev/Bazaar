@@ -1,0 +1,431 @@
+import { buildSystemPrompt } from "@/lib/agent/prompt";
+import { getMcpManager } from "@/lib/mcp/manager";
+import { toolLabel } from "@/lib/mcp/config";
+import {
+  compactToolOutputForModel,
+  normalizeToolOutput,
+  summarizeToolContentForModel,
+} from "@/lib/mcp/normalize";
+import {
+  OpenRouterError,
+  getFallbackChain,
+  getModelRegistry,
+  getPaidFallbackModel,
+  resolveModel,
+} from "@/lib/openrouter/models";
+import { markCooldown } from "@/lib/openrouter/providers";
+import {
+  streamChatCompletion,
+  type OpenRouterMessage,
+  type OpenRouterTool,
+  type OpenRouterToolCall,
+} from "@/lib/openrouter/client";
+import type {
+  AgentEvent,
+  ChatRequestBody,
+  ChatUsage,
+  FreeModel,
+  MarketplaceId,
+  Product,
+  ToolActivity,
+} from "@/lib/types";
+
+const MAX_ROUNDS = 4;
+const MAX_TOOL_CALLS_PER_ROUND = 10;
+const MAX_HISTORY_MESSAGES = 8;
+const MAX_MESSAGE_CHARS = 3_000;
+const MAX_TOOL_CHARS = 6_000;
+
+function cleanHistory(messages: ChatRequestBody["messages"]): Array<{ role: "user" | "assistant"; content: string }> {
+  const cleaned = (messages || [])
+    .filter((message) => message && (message.role === "user" || message.role === "assistant"))
+    .map((message) => ({
+      role: message.role,
+      content: String(message.content || "").slice(0, MAX_MESSAGE_CHARS).trim(),
+    }))
+    .filter((message) => message.content.length > 0);
+  return cleaned.slice(-MAX_HISTORY_MESSAGES);
+}
+
+function parseToolArguments(raw: string): Record<string, unknown> {
+  if (!raw || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+function prepareToolArguments(
+  tool: string,
+  args: Record<string, unknown>,
+  city: string,
+  supportsJson: boolean,
+): Record<string, unknown> {
+  const prepared: Record<string, unknown> = { ...args };
+
+  if (tool.startsWith("search_")) {
+    const limit = Number(prepared.limit);
+    prepared.limit = Number.isFinite(limit) ? Math.max(1, Math.min(10, Math.trunc(limit))) : 8;
+  }
+  if (tool === "search_marketplace") {
+    if (!prepared.city || typeof prepared.city !== "string") prepared.city = city;
+    const radius = Number(prepared.radius_km);
+    prepared.radius_km = Number.isFinite(radius) ? Math.max(1, Math.min(120, Math.trunc(radius))) : 30;
+  }
+  if (tool === "search_subito") {
+    delete prepared.format;
+  } else if (supportsJson) {
+    prepared.format = "json";
+  }
+  return prepared;
+}
+
+function supportsJsonFormat(tools: OpenRouterTool[], toolName: string): boolean {
+  const tool = tools.find((entry) => entry.function.name === toolName);
+  const properties = tool?.function.parameters?.properties as Record<string, unknown> | undefined;
+  return Boolean(properties && "format" in properties);
+}
+
+function shortModelLabel(model: FreeModel): string {
+  const name = model.name
+    .replace(/\s*\(free\)\s*/i, "")
+    .replace(/^OpenRouter:\s*/i, "")
+    .trim();
+  return `${name}${model.isPaid ? " · riserva" : " · free"}`;
+}
+
+function isRetryableModelError(error: unknown): boolean {
+  if (error instanceof OpenRouterError) {
+    return [400, 404, 408, 413, 429, 500, 502, 503, 504].includes(error.status) || error.status === 0;
+  }
+  return error instanceof TypeError;
+}
+
+async function callModelWithFallback(options: {
+  primary: FreeModel;
+  registry: Awaited<ReturnType<typeof getModelRegistry>>;
+  allowPaidFallback: boolean;
+  messages: OpenRouterMessage[];
+  tools: OpenRouterTool[];
+  signal?: AbortSignal;
+  emit: (event: AgentEvent) => void;
+}): Promise<{
+  model: FreeModel;
+  content: string;
+  toolCalls: OpenRouterToolCall[];
+  finishReason: string | null;
+  usage?: ChatUsage;
+  fallbackUsed: boolean;
+}> {
+  const chain = getFallbackChain(options.primary, options.registry, options.allowPaidFallback);
+  let lastError: unknown = null;
+
+  for (let index = 0; index < chain.length; index += 1) {
+    const model = chain[index];
+    let emitted = false;
+    let announced = index === 0;
+    const announceFallback = () => {
+      if (announced) return;
+      announced = true;
+      options.emit({
+        type: "meta",
+        model,
+        modelLabel: shortModelLabel(model),
+        fallback: Boolean(model.isPaid),
+      });
+    };
+    try {
+      if (index > 0) {
+        options.emit({
+          type: "notice",
+          message: model.isPaid
+            ? `I modelli gratuiti sono saturi. Uso la riserva economica (${model.name})…`
+            : `Il modello precedente non è disponibile. Provo con ${model.name}…`,
+        });
+      }
+      const result = await streamChatCompletion({
+        target: model,
+        messages: options.messages,
+        tools: options.tools,
+        signal: options.signal,
+        onDelta: (delta) => {
+          emitted = true;
+          announceFallback();
+          options.emit({ type: "delta", text: delta });
+        },
+      });
+      if (
+        result.discardedToolCallText &&
+        !result.content.trim() &&
+        !result.toolCalls.length
+      ) {
+        throw new OpenRouterError(
+          "Il modello ha scritto una chiamata tool non valida. Provo un altro modello.",
+          502,
+        );
+      }
+      announceFallback();
+      return {
+        model,
+        content: result.content,
+        toolCalls: result.toolCalls,
+        finishReason: result.finishReason,
+        usage: result.usage,
+        fallbackUsed: index > 0,
+      };
+    } catch (error) {
+      lastError = error;
+      if (options.signal?.aborted) throw error;
+      if (error instanceof OpenRouterError && error.status === 429) markCooldown(model.id);
+      if (emitted || !isRetryableModelError(error)) throw error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new OpenRouterError("Nessun modello LLM disponibile.", 503);
+}
+
+export async function runAgent(options: {
+  body: ChatRequestBody;
+  signal?: AbortSignal;
+  emit: (event: AgentEvent) => void;
+}): Promise<void> {
+  const { body, signal, emit } = options;
+  const history = cleanHistory(body.messages || []);
+  if (!history.length || history[history.length - 1].role !== "user") {
+    throw new Error("La richiesta non contiene un messaggio utente.");
+  }
+
+  const city = (body.city || "Milano").trim() || "Milano";
+  const requestedMarketplaces = Array.isArray(body.marketplaces)
+    ? body.marketplaces.filter((id): id is MarketplaceId =>
+        ["amazon", "aliexpress", "vinted", "subito", "facebook-marketplace"].includes(id),
+      )
+    : undefined;
+
+  const manager = getMcpManager();
+  await manager.ensureAll();
+  const status = manager.getStatus();
+  const online = status
+    .filter((server) => server.status === "online")
+    .map((server) => server.id)
+    .filter((id) => !requestedMarketplaces || requestedMarketplaces.includes(id));
+  const offline = status
+    .filter((server) => server.status !== "online")
+    .map((server) => server.id)
+    .filter((id) => !requestedMarketplaces || requestedMarketplaces.includes(id));
+
+  const { model: initialModel, registry } = await resolveModel(body.model, false);
+  emit({
+    type: "meta",
+    model: initialModel,
+    modelLabel: shortModelLabel(initialModel),
+    fallback: Boolean(initialModel.isPaid),
+  });
+  if (registry.source === "fallback" && registry.note) {
+    emit({ type: "notice", message: registry.note });
+  }
+
+  const tools = manager.getOpenAiTools(online) as OpenRouterTool[];
+  if (!tools.length) {
+    throw new Error(
+      "Nessun marketplace è connesso. Apri “Connessioni”, controlla i server MCP e riprova.",
+    );
+  }
+
+  const allowPaidFallback =
+    Boolean(body.allowPaidFallback) &&
+    process.env.OPENROUTER_ALLOW_PAID_FALLBACK === "true" &&
+    Boolean(process.env.OPENROUTER_API_KEY);
+
+  const messages: OpenRouterMessage[] = [
+    {
+      role: "system",
+      content: buildSystemPrompt({ online, offline, city }),
+    },
+    ...history,
+  ];
+
+  let totalUsage: ChatUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  let modelUsed = initialModel;
+  let anyText = false;
+
+  for (let round = 0; round < MAX_ROUNDS; round += 1) {
+    const result = await callModelWithFallback({
+      primary: modelUsed,
+      registry,
+      allowPaidFallback,
+      messages,
+      tools,
+      signal,
+      emit,
+    });
+    modelUsed = result.model;
+    if (result.usage) {
+      totalUsage = {
+        promptTokens: totalUsage.promptTokens + result.usage.promptTokens,
+        completionTokens: totalUsage.completionTokens + result.usage.completionTokens,
+        totalTokens: totalUsage.totalTokens + result.usage.totalTokens,
+      };
+    }
+    if (result.content.trim()) anyText = true;
+
+    const toolCalls = result.toolCalls.slice(0, MAX_TOOL_CALLS_PER_ROUND);
+    if (!toolCalls.length) {
+      if (!result.content.trim() && !anyText) {
+        throw new Error("Il modello non ha prodotto una risposta. Riprova con una richiesta più specifica.");
+      }
+      emit({
+        type: "done",
+        usage: totalUsage.totalTokens ? totalUsage : undefined,
+        modelLabel: shortModelLabel(modelUsed),
+      });
+      return;
+    }
+
+    // I risultati dei round precedenti sono già stati letti dal modello:
+    // li sostituisco con un riassunto minimo per non rimandarli ad ogni giro.
+    for (const message of messages) {
+      if (message.role === "tool" && !message.content.includes('"riassunto"')) {
+        message.content = summarizeToolContentForModel(message.content);
+      }
+    }
+
+    messages.push({
+      role: "assistant",
+      content: result.content || null,
+      tool_calls: toolCalls,
+    });
+
+    const activities: ToolActivity[] = toolCalls.map((call) => {
+      const resolved = manager.resolveTool(call.function.name);
+      return {
+        id: call.id,
+        server: resolved?.server || "unknown",
+        tool: call.function.name,
+        label: toolLabel(resolved?.server || "", call.function.name),
+        args: parseToolArguments(call.function.arguments),
+        status: "running",
+        startedAt: Date.now(),
+      };
+    });
+
+    for (const activity of activities) emit({ type: "activity", activity });
+
+    const executions = await Promise.all(
+      toolCalls.map(async (call, index) => {
+        const activity = activities[index];
+        const resolved = manager.resolveTool(call.function.name);
+        if (!resolved) {
+          return {
+            call,
+            activity: {
+              ...activity,
+              status: "error" as const,
+              durationMs: 0,
+              error: `Tool sconosciuto: ${call.function.name}`,
+            },
+            modelContent: JSON.stringify({ errore: `Tool sconosciuto: ${call.function.name}` }),
+            products: [] as Product[],
+          };
+        }
+
+        const args = prepareToolArguments(
+          resolved.tool,
+          parseToolArguments(call.function.arguments),
+          city,
+          supportsJsonFormat(tools, resolved.tool),
+        );
+        activity.args = args;
+        emit({ type: "activity", activity: { ...activity, args } });
+
+        const raw = await manager.callTool(resolved.server, resolved.tool, args);
+        const output = normalizeToolOutput(resolved.server, resolved.tool, raw.text);
+        const isError = raw.isError || Boolean(output.error);
+        const modelContent = compactToolOutputForModel(resolved.server, resolved.tool, output);
+        const updated: ToolActivity = {
+          ...activity,
+          args,
+          status: isError ? "error" : "done",
+          durationMs: raw.durationMs,
+          count: output.products.length,
+          error: isError ? output.error || "Errore dal marketplace" : undefined,
+          products: output.products,
+        };
+        emit({ type: "activity", activity: updated });
+
+        return {
+          call,
+          activity: updated,
+          modelContent: isError
+            ? JSON.stringify({ errore: updated.error || "Errore dal marketplace" })
+            : modelContent,
+          products: output.products,
+        };
+      }),
+    );
+
+    for (const execution of executions) {
+      messages.push({
+        role: "tool",
+        tool_call_id: execution.call.id,
+        content: execution.modelContent.slice(0, MAX_TOOL_CHARS),
+      });
+    }
+
+    if (round === MAX_ROUNDS - 1) {
+      emit({
+        type: "notice",
+        message: "Ho raggiunto il limite di ricerche per questa risposta. Concludo con i dati raccolti.",
+      });
+    }
+  }
+
+  // Ultimo giro senza tool: obbliga il modello a scrivere la risposta finale
+  // usando i risultati già raccolti.
+  const finalResult = await callModelWithFallback({
+    primary: modelUsed,
+    registry,
+    allowPaidFallback,
+    messages,
+    tools: [],
+    signal,
+    emit,
+  });
+  modelUsed = finalResult.model;
+  if (finalResult.usage) {
+    totalUsage = {
+      promptTokens: totalUsage.promptTokens + finalResult.usage.promptTokens,
+      completionTokens: totalUsage.completionTokens + finalResult.usage.completionTokens,
+      totalTokens: totalUsage.totalTokens + finalResult.usage.totalTokens,
+    };
+  }
+  if (!finalResult.content.trim() && !anyText) {
+    throw new Error("Il modello non ha prodotto una risposta. Riprova con una richiesta più specifica.");
+  }
+
+  emit({
+    type: "done",
+    usage: totalUsage.totalTokens ? totalUsage : undefined,
+    modelLabel: shortModelLabel(modelUsed),
+  });
+}
+
+export function describeModelForClient(model: FreeModel): FreeModel {
+  return {
+    ...model,
+    description: model.description?.slice(0, 280),
+  };
+}
+
+export function paidFallbackAvailable(): boolean {
+  return process.env.OPENROUTER_ALLOW_PAID_FALLBACK === "true" && Boolean(process.env.OPENROUTER_API_KEY);
+}
+
+export { getPaidFallbackModel };

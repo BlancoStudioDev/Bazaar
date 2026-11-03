@@ -1,0 +1,137 @@
+"use client";
+
+import { Plus, Settings2, Trash2, X } from "lucide-react";
+
+import { MARKETPLACE_IDS } from "@/lib/marketplaces";
+import type { BazaarStore } from "@/lib/use-bazaar";
+import { cn, groupConversations, relativeTime } from "@/lib/ui";
+
+export function Sidebar({
+  store,
+  onNew,
+  onOpenSettings,
+  onClose,
+  mobile = false,
+}: {
+  store: BazaarStore;
+  onNew: () => void;
+  onOpenSettings: () => void;
+  onClose?: () => void;
+  mobile?: boolean;
+}) {
+  const groups = groupConversations(store.conversations);
+  const online = store.status?.mcp.filter((server) => server.status === "online").length ?? 0;
+  const total = store.status?.mcp.length || MARKETPLACE_IDS.length;
+  const allOnline = Boolean(store.status) && online === total;
+
+  return (
+    <aside className={cn("sidebar", mobile && "is-mobile")}>
+      <div className="flex items-center justify-between gap-4 px-4 pb-4 pt-6">
+        <div className="flex items-baseline gap-1">
+          <span className="font-serif text-[32px] leading-none tracking-[-0.03em] text-sidebar-ink">
+            bazaar
+          </span>
+          <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
+        </div>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-sidebar-ink/70 transition hover:bg-white/10 hover:text-sidebar-ink"
+            aria-label="Chiudi menu"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+
+      <div className="px-4">
+        <button type="button" onClick={onNew} className="new-search-button">
+          <Plus className="h-4 w-4" />
+          <span className="flex-1 text-left text-[13px] font-medium">Nuova ricerca</span>
+          <span className="hidden font-mono text-[11px] text-ink/40 lg:inline">⌘N</span>
+        </button>
+      </div>
+
+      <nav aria-label="Cronologia" className="scrollbar-dark mt-4 flex-1 overflow-y-auto px-2">
+        {groups.length ? (
+          groups.map((group) => (
+            <div key={group.label} className="mb-4">
+              <p className="px-3 pb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-sidebar-ink/45">
+                {group.label}
+              </p>
+              <ul className="space-y-1">
+                {group.items.map((conversation) => {
+                  const active = conversation.id === store.activeId;
+                  return (
+                    <li
+                      key={conversation.id}
+                      className={cn(
+                        "group/item relative flex items-center rounded-xl transition",
+                        active
+                          ? "bg-sidebar-ink/[0.1] text-sidebar-ink"
+                          : "text-sidebar-ink/70 hover:bg-white/[0.05] hover:text-sidebar-ink",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => store.selectConversation(conversation.id)}
+                        aria-current={active ? "true" : undefined}
+                        className="min-h-10 min-w-0 flex-1 px-3 py-2 text-left"
+                      >
+                        <span className="block truncate text-[13px] leading-tight">
+                          {conversation.title}
+                        </span>
+                        <span className="mt-1 block font-mono text-[11px] text-sidebar-ink/45">
+                          {relativeTime(conversation.updatedAt)}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Eliminare «${conversation.title}»?`)) {
+                            store.deleteConversation(conversation.id);
+                          }
+                        }}
+                        className={cn(
+                          "mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sidebar-ink/50 transition hover:bg-white/10 hover:text-sidebar-ink focus-visible:opacity-100",
+                          mobile ? "" : "opacity-0 group-hover/item:opacity-100",
+                        )}
+                        aria-label={`Elimina «${conversation.title}»`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))
+        ) : (
+          <p className="px-3 py-4 text-[13px] leading-relaxed text-sidebar-ink/55">
+            Le ricerche che fai compariranno qui.
+          </p>
+        )}
+      </nav>
+
+      <div className="border-t border-white/[0.08] p-2">
+        <button type="button" onClick={onOpenSettings} className="sidebar-card">
+          <Settings2 className="h-4 w-4 shrink-0 text-sidebar-ink/70" />
+          <span className="min-w-0 flex-1 text-[13px] text-sidebar-ink">Impostazioni</span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-2 font-mono text-[11px]",
+              allOnline ? "text-sidebar-ink/55" : "text-accent",
+            )}
+          >
+            <span
+              className={cn("h-2 w-2 rounded-full", allOnline ? "bg-emerald-400" : "bg-accent")}
+              aria-hidden
+            />
+            {store.status ? `${online}/${total}` : "…"}
+          </span>
+        </button>
+      </div>
+    </aside>
+  );
+}
