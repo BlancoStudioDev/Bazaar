@@ -80,6 +80,9 @@ function prepareToolArguments(
   cityIsExplicit = false,
 ): Record<string, unknown> {
   const prepared: Record<string, unknown> = { ...args };
+  // Per le ricerche l'url non serve mai (il server costruisce l'indirizzo da query/città): un url scritto
+  // dal modello, spesso inventato o degenere, farebbe ignorare la query.
+  if (tool.startsWith("search_")) delete prepared.url;
   // I modelli piccoli riempiono i parametri opzionali con segnaposto ("n/d", "null"...):
   // un url="n/d" fa ignorare la query. Meglio non passarli affatto.
   for (const [key, value] of Object.entries(prepared)) {

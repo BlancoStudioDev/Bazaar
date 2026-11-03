@@ -193,6 +193,126 @@ function parsePseudoToolCalls(
   return calls;
 }
 
+/**
+ * Alcuni modelli scrivono le chiamate ai tool come TESTO JSON, es. `[{"name":"search_amazon","parameters":{...}}]`,
+ * invece di usare il canale nativo. Questo filtro trattiene il testo che inizia così (non lo mostra mai
+ * all'utente) e lo restituisce a fine stream per convertirlo in vere tool-call.
+ */
+class JsonCallGate {
+  private head = "";
+  private decided = false;
+  private json = false;
+  private held = "";
+  private readonly forward: (text: string) => void;
+
+  constructor(forward: (text: string) => void) {
+    this.forward = forward;
+  }
+
+  push(text: string): void {
+    if (this.json) {
+      this.held += text;
+      return;
+    }
+    if (this.decided) {
+      this.forward(text);
+      return;
+    }
+    this.head += text;
+    const trimmed = this.head.trimStart();
+    if (trimmed.length < 16) return; // troppo presto per decidere
+    this.decided = true;
+    if (/^\[?\s*\{\s*"(?:name|function|tool)"\s*:/.test(trimmed)) {
+      this.json = true;
+      this.held = this.head;
+    } else {
+      this.forward(this.head);
+    }
+    this.head = "";
+  }
+
+  /** Testo JSON trattenuto (vuoto se il contenuto era normale testo). */
+  finish(): string {
+    if (!this.decided && this.head) {
+      const trimmed = this.head.trimStart();
+      if (/^\[?\s*\{\s*"(?:name|function|tool)"\s*:/.test(trimmed)) {
+        this.json = true;
+        this.held = this.head;
+      } else {
+        this.forward(this.head);
+      }
+      this.head = "";
+      this.decided = true;
+    }
+    return this.json ? this.held : "";
+  }
+}
+
+/** Estrae gli oggetti JSON completi (anche da un array troncato o rovinato) bilanciando le graffe. */
+function extractJsonObjects(text: string): unknown[] {
+  const out: unknown[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        try {
+          out.push(JSON.parse(text.slice(start, i + 1)));
+        } catch {
+          // oggetto non valido: lo salto
+        }
+        start = -1;
+      }
+      if (depth < 0) depth = 0;
+    }
+  }
+  return out;
+}
+
+function parseJsonTextCalls(text: string, allowed: Set<string>): OpenRouterToolCall[] {
+  const calls: OpenRouterToolCall[] = [];
+  for (const entry of extractJsonObjects(text)) {
+    const record = entry as {
+      name?: unknown;
+      tool?: unknown;
+      function?: { name?: unknown; arguments?: unknown; parameters?: unknown } | unknown;
+      parameters?: unknown;
+      arguments?: unknown;
+    };
+    const fn = record.function && typeof record.function === "object" ? (record.function as Record<string, unknown>) : null;
+    const name = String(record.name ?? record.tool ?? fn?.name ?? "");
+    if (!name || !allowed.has(name)) continue;
+    let args: unknown = record.parameters ?? record.arguments ?? fn?.parameters ?? fn?.arguments ?? {};
+    if (typeof args === "string") {
+      try {
+        args = JSON.parse(args);
+      } catch {
+        args = {};
+      }
+    }
+    calls.push({
+      id: `call_json_${calls.length}_${Date.now()}`,
+      type: "function",
+      function: { name, arguments: JSON.stringify(args && typeof args === "object" ? args : {}) },
+    });
+  }
+  return calls;
+}
+
 interface StreamChunk {
   id?: string;
   model?: string;
@@ -338,6 +458,7 @@ export async function streamChatCompletion(
     content += text;
     onDelta?.(text);
   });
+  const jsonGate = new JsonCallGate((text) => textFilter.push(text));
   const toolAccumulator = new Map<
     number,
     { id: string; name: string; arguments: string }
@@ -367,7 +488,7 @@ export async function streamChatCompletion(
     const delta = choice.delta;
     if (!delta) return;
     if (typeof delta.content === "string" && delta.content.length > 0) {
-      textFilter.push(delta.content);
+      jsonGate.push(delta.content);
     }
 
     for (let index = 0; index < (delta.tool_calls?.length || 0); index += 1) {
@@ -432,9 +553,11 @@ export async function streamChatCompletion(
   buffer += decoder.decode();
   processBuffer(true);
 
+  const jsonText = jsonGate.finish();
   const pseudoBlocks = textFilter.finish();
-  const pseudoCalls = parsePseudoToolCalls(pseudoBlocks, allowedTools);
-  const discardedToolCallText = pseudoBlocks.length > 0 && pseudoCalls.length === 0;
+  const jsonCalls = jsonText ? parseJsonTextCalls(jsonText, allowedTools) : [];
+  const pseudoCalls = [...parsePseudoToolCalls(pseudoBlocks, allowedTools), ...jsonCalls];
+  const discardedToolCallText = (pseudoBlocks.length > 0 || Boolean(jsonText)) && pseudoCalls.length === 0;
 
   const nativeCalls: OpenRouterToolCall[] = Array.from(toolAccumulator.entries())
     .sort(([a], [b]) => a - b)
