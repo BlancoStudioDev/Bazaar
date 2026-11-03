@@ -1,6 +1,13 @@
 import { explicitCityInText } from "@/lib/agent/city";
 import { enrichWithDescriptions } from "@/lib/agent/enrich";
 import { buildSystemPrompt } from "@/lib/agent/prompt";
+import {
+  REFUSALS,
+  buildGuardMessages,
+  parseGuardReply,
+  ruleCheck,
+  type GuardVerdict,
+} from "@/lib/agent/guard";
 import { getMcpManager } from "@/lib/mcp/manager";
 import { toolLabel } from "@/lib/mcp/config";
 import {
@@ -186,6 +193,7 @@ async function callModelWithFallback(options: {
   messages: OpenRouterMessage[];
   tools: OpenRouterTool[];
   toolChoice?: "auto" | "required";
+  maxTokens?: number;
   signal?: AbortSignal;
   emit: (event: AgentEvent) => void;
 }): Promise<{
@@ -233,6 +241,7 @@ async function callModelWithFallback(options: {
             messages: options.messages,
             tools: options.tools,
             toolChoice: options.toolChoice,
+            maxTokens: options.maxTokens,
             signal: options.signal,
             onDelta: (delta) => {
               emitted = true;
@@ -297,6 +306,58 @@ async function callModelWithFallback(options: {
     : new OpenRouterError("Nessun modello LLM disponibile.", 503);
 }
 
+/**
+ * Guardrail: prima di spendere ricerche e token, un modello veloce valuta se l'ultimo messaggio
+ * è una richiesta legittima per Bazaar. Regole deterministiche → modello → (se tutti falliscono) vedi GUARD_FAIL_MODE.
+ */
+async function checkRequest(options: {
+  history: ReturnType<typeof cleanHistory>;
+  registry: Awaited<ReturnType<typeof getModelRegistry>>;
+  signal?: AbortSignal;
+}): Promise<GuardVerdict> {
+  const last = options.history[options.history.length - 1].content;
+  const byRules = ruleCheck(last);
+  if (byRules) return byRules;
+  if (process.env.GUARD_DISABLED === "true") return { ok: true, source: "non_verificato" };
+
+  // Modello più veloce tra i free con qualità decente: il compito è una classificazione breve.
+  const fast = options.registry.models
+    .filter((model) => model.scores.intelligence >= 50)
+    .sort((a, b) => b.scores.speed - a.scores.speed)[0] ?? options.registry.selected ?? options.registry.routerModel;
+  const primary = process.env.GUARD_MODEL
+    ? options.registry.models.find((model) => model.id === process.env.GUARD_MODEL) ?? fast
+    : fast;
+  if (!primary) return failVerdict();
+
+  try {
+    const result = await Promise.race([
+      callModelWithFallback({
+        primary,
+        registry: options.registry,
+        allowPaidFallback: false,
+        messages: buildGuardMessages(options.history),
+        tools: [],
+        signal: options.signal,
+        emit: () => {}, // la decisione del filtro non va mostrata all'utente
+        maxTokens: 60,
+      }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("guard timeout")), 15_000)),
+    ]);
+    const verdict = parseGuardReply(result.content);
+    if (verdict) return verdict;
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    console.warn(`[bazaar] guardrail non disponibile: ${error instanceof Error ? error.message : error}`);
+  }
+  return failVerdict();
+}
+
+/** Se il filtro non risponde: di default lascia passare (le regole deterministiche sono già state applicate). */
+function failVerdict(): GuardVerdict {
+  if (process.env.GUARD_FAIL_MODE === "closed") return { ok: false, category: "fuori_tema", source: "non_verificato" };
+  return { ok: true, source: "non_verificato" };
+}
+
 export async function runAgent(options: {
   body: ChatRequestBody;
   signal?: AbortSignal;
@@ -331,6 +392,14 @@ export async function runAgent(options: {
     .filter((id) => !requestedMarketplaces || requestedMarketplaces.includes(id));
 
   const { model: initialModel, registry } = await resolveModel(body.model, false);
+
+  const verdict = await checkRequest({ history, registry, signal });
+  if (!verdict.ok) {
+    console.log(`[bazaar] guardrail: richiesta bloccata (${verdict.category}, ${verdict.source})`);
+    emit({ type: "delta", text: REFUSALS[verdict.category ?? "fuori_tema"] });
+    emit({ type: "done", modelLabel: "Filtro Bazaar" });
+    return;
+  }
   emit({
     type: "meta",
     model: initialModel,

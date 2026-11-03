@@ -188,6 +188,10 @@ Limiti noti:
 - **Facebook Marketplace è disabilitato sul server** (`MCP_DISABLED=facebook-marketplace`): legge i cookie dal profilo Chrome del Mac. I cookie manuali sono possibili ma sconsigliati (vedi `deploy/README.md`).
 - Le conversazioni restano in `localStorage` del browser, per utente e per dispositivo: non sono sincronizzate né recuperabili dal server.
 
+## Guardrail sulle richieste
+
+Prima di cercare, ogni messaggio passa da un filtro: (1) regole locali (lunghezza massima 700 caratteri, caratteri di controllo, tentativi evidenti di prompt injection) e (2) un modello free veloce che classifica il messaggio come richiesta di shopping legittima o come `fuori_tema`, `illegale`, `abuso`, `injection`. Se non passa, l'app risponde con un rifiuto e non cerca né spende token sul modello principale. I follow-up ("solo a Milano") sono consentiti. Se il modello del filtro non risponde, di default (`GUARD_FAIL_MODE=open`) la richiesta passa dopo le regole locali; con `closed` viene bloccata. Titoli e descrizioni degli annunci sono trattati come dati non fidati nel prompt dell'agente.
+
 ## Note di design
 
 - Palette carta calda, inchiostro scuro e accento vermiglio; serif display (Instrument Serif) per i titoli, Geist per il testo, mono per i dati.
