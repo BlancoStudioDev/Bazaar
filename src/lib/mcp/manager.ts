@@ -1,5 +1,5 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 import {
   getMcpServerConfigs,
@@ -176,6 +176,7 @@ class McpManager {
       command: runtime.config.command,
       args: runtime.config.args,
       cwd: runtime.config.cwd,
+      ...(runtime.config.env ? { env: { ...getDefaultEnvironment(), ...runtime.config.env } } : {}),
       stderr: "pipe",
       maxBufferSize: 32 * 1024 * 1024,
     });

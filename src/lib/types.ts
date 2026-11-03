@@ -1,5 +1,6 @@
 export type MarketplaceId =
   | "amazon"
+  | "ebay"
   | "aliexpress"
   | "vinted"
   | "subito"

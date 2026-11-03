@@ -72,7 +72,7 @@ export function SharedChat({ snapshot, sharedAt }: { snapshot: ShareSnapshot; sh
             Cerca anche tu, <span className="italic text-accent">senza girare i marketplace</span>
           </h2>
           <p className="mt-2 max-w-[520px] text-[14px] leading-relaxed text-ink-2">
-            Bazaar confronta Amazon, Vinted, Subito e altri in un&apos;unica chat e ti mostra dove costa meno.
+            Bazaar confronta Amazon, eBay, Vinted, Subito e altri in un&apos;unica chat e ti mostra dove costa meno.
           </p>
           <Link href="/login" className="btn-quiet mt-4">
             Cerca anche tu su Bazaar

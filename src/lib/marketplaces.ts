@@ -20,6 +20,15 @@ export const MARKETPLACES: Record<MarketplaceId, MarketplaceMeta> = {
     description: "Nuovo, spedizioni veloci, resi facili",
     domain: "amazon.it",
   },
+  ebay: {
+    id: "ebay",
+    label: "eBay.it",
+    shortLabel: "eBay",
+    color: "#e53238",
+    textColor: "#fff5f5",
+    description: "Nuovo e usato, aste e Compralo Subito",
+    domain: "ebay.it",
+  },
   aliexpress: {
     id: "aliexpress",
     label: "AliExpress",
@@ -60,6 +69,7 @@ export const MARKETPLACES: Record<MarketplaceId, MarketplaceMeta> = {
 
 export const MARKETPLACE_ORDER: MarketplaceId[] = [
   "amazon",
+  "ebay",
   "vinted",
   "subito",
   "facebook-marketplace",

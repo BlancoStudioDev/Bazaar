@@ -23,7 +23,7 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   title: "Bazaar — personal shopper AI",
   description:
-    "Cerca su Amazon, AliExpress, Vinted, Subito e Facebook Marketplace in un'unica chat. Confronta prezzi reali e trova dove costa meno.",
+    "Cerca su Amazon, eBay, AliExpress, Vinted, Subito e Facebook Marketplace in un'unica chat. Confronta prezzi reali e trova dove costa meno.",
   applicationName: "Bazaar",
 };
 

@@ -14,7 +14,7 @@ export interface GuardVerdict {
 
 export const REFUSALS: Record<GuardCategory, string> = {
   fuori_tema:
-    "Posso aiutarti solo a cercare e confrontare prodotti sui marketplace (Amazon, AliExpress, Vinted, Subito, Facebook Marketplace). Dimmi cosa vorresti comprare, per esempio «una RTX 4070 usata a Milano».",
+    "Posso aiutarti solo a cercare e confrontare prodotti sui marketplace (Amazon, eBay, AliExpress, Vinted, Subito, Facebook Marketplace). Dimmi cosa vorresti comprare, per esempio «una RTX 4070 usata a Milano».",
   illegale:
     "Non posso aiutarti con questa richiesta. Posso cercare prodotti legali sui marketplace: dimmi cosa ti serve.",
   abuso: "Non posso rispondere a questo messaggio. Se vuoi, scrivimi che prodotto cerchi e lo confronto per te.",
@@ -45,7 +45,7 @@ export function ruleCheck(text: string): GuardVerdict | null {
   return null;
 }
 
-const GUARD_SYSTEM = `Sei il filtro di ingresso di Bazaar, un assistente che SOLO cerca e confronta prodotti sui marketplace (Amazon, AliExpress, Vinted, Subito, Facebook Marketplace).
+const GUARD_SYSTEM = `Sei il filtro di ingresso di Bazaar, un assistente che SOLO cerca e confronta prodotti sui marketplace (Amazon, eBay, AliExpress, Vinted, Subito, Facebook Marketplace).
 Decidi se l'ULTIMO messaggio dell'utente è una richiesta legittima per questo servizio.
 
 CONSENTI (ok=true): cercare, confrontare o filtrare prodotti, prezzi, annunci, venditori, condizioni, spedizione, località; domande di chiarimento o follow-up sul risultato precedente (es. "solo a Milano", "sotto i 50 euro", "quale conviene?", "è compatibile con...?").

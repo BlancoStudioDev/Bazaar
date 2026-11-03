@@ -6,6 +6,10 @@ const servers = {
     command: "/Users/blanco05/.config/opencode/mcp/.venv/bin/python",
     args: ["/Users/blanco05/.config/opencode/mcp/amazon/server.py"],
   },
+  ebay: {
+    command: "/Users/blanco05/.config/opencode/mcp/.venv/bin/python",
+    args: ["/Users/blanco05/.config/opencode/mcp/ebay/server.py"],
+  },
   aliexpress: {
     command: "/Users/blanco05/.config/opencode/mcp/.venv/bin/python",
     args: ["/Users/blanco05/.config/opencode/mcp/aliexpress/server.py"],
@@ -44,6 +48,7 @@ for (const tool of tools.tools) {
 }
 const test = {
   amazon: ["search_amazon", { query: query, limit, format: "json" }],
+  ebay: ["search_ebay", { query: query, limit, format: "json" }],
   aliexpress: ["search_aliexpress", { query: query, limit, format: "json" }],
   vinted: ["search_vinted", { query: query, limit, format: "json" }],
   subito: ["search_subito", { query: query, limit }],

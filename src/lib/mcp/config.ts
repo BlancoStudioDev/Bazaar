@@ -16,6 +16,8 @@ export interface McpServerConfig {
   allowedTools: string[];
   /** Timeout massimo di una singola chiamata tool (ms). */
   toolTimeoutMs: number;
+  /** Variabili d'ambiente extra per il processo del server (si aggiungono a quelle di default dell'SDK). */
+  env?: Record<string, string>;
 }
 
 const DEFAULT_TOOL_TIMEOUT_MS = Number(process.env.MCP_TOOL_TIMEOUT_MS) || 20_000;
@@ -41,6 +43,7 @@ function server(
   dir: string,
   allowedTools: string[],
   toolTimeoutMs = DEFAULT_TOOL_TIMEOUT_MS,
+  env?: Record<string, string>,
 ): McpServerConfig {
   const cwd = path.join(MCP_ROOT, dir);
   return {
@@ -53,7 +56,18 @@ function server(
     cwd,
     allowedTools,
     toolTimeoutMs,
+    ...(env && Object.keys(env).length ? { env } : {}),
   };
+}
+
+/** Credenziali opzionali per le API ufficiali eBay (senza, il server fa scraping di ebay.it). */
+function ebayEnv(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "EBAY_ENV"]) {
+    const value = process.env[key];
+    if (value) out[key] = value;
+  }
+  return out;
 }
 
 export function getMcpServerConfigs(): McpServerConfig[] {
@@ -66,6 +80,7 @@ export function getMcpServerConfigs(): McpServerConfig[] {
 
   const configs: McpServerConfig[] = [
     server("amazon", SHARED_PYTHON, "amazon", ["search_amazon", "get_product"]),
+    server("ebay", SHARED_PYTHON, "ebay", ["search_ebay", "get_ebay_item"], DEFAULT_TOOL_TIMEOUT_MS, ebayEnv()),
     server("aliexpress", SHARED_PYTHON, "aliexpress", ["search_aliexpress"]),
     server("vinted", SHARED_PYTHON, "vinted", ["search_vinted", "get_item"]),
     server("subito", SUBITO_PYTHON, "subito-search", ["search_subito"]),
@@ -89,6 +104,8 @@ export function toolLabel(server: string, tool: string): string {
   const labels: Record<string, string> = {
     search_amazon: "Cerco su Amazon",
     get_product: "Apro la scheda Amazon",
+    search_ebay: "Cerco su eBay",
+    get_ebay_item: "Apro l'annuncio eBay",
     search_aliexpress: "Cerco su AliExpress",
     search_vinted: "Cerco su Vinted",
     get_item: "Apro l'annuncio Vinted",

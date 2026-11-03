@@ -375,7 +375,7 @@ export async function runAgent(options: {
   const city = explicitCity || settingsCity;
   const requestedMarketplaces = Array.isArray(body.marketplaces)
     ? body.marketplaces.filter((id): id is MarketplaceId =>
-        ["amazon", "aliexpress", "vinted", "subito", "facebook-marketplace"].includes(id),
+        ["amazon", "ebay", "aliexpress", "vinted", "subito", "facebook-marketplace"].includes(id),
       )
     : undefined;
 
@@ -615,7 +615,7 @@ export async function runAgent(options: {
         const parts = local.map((e) => `${names[e.activity.server]} ${e.activity.count ?? 0}`);
         emit({
           type: "notice",
-          message: `Annunci locali a ${explicitCity}: ${parts.join(" · ")}. Amazon, AliExpress e Vinted spediscono da altrove.`,
+          message: `Annunci locali a ${explicitCity}: ${parts.join(" · ")}. Amazon, eBay, AliExpress e Vinted spediscono da altrove.`,
         });
       }
     }

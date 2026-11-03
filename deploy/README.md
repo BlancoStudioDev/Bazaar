@@ -5,7 +5,7 @@ Layout sul server (`DEPLOY_PATH`, default `/home/blanco05/bazaar`):
 ```
 bazaar/
 ├── app/             codice Next.js (sincronizzato da deploy.sh)
-├── mcp/             5 server MCP Python + venv creati sul server
+├── mcp/             6 server MCP Python + venv creati sul server
 ├── data/            SQLite dell'auth (persistente, NON sovrascritta dal deploy)
 └── .env.production  segreti (chmod 600, creato a mano, mai sincronizzato)
 ```
@@ -117,7 +117,7 @@ Poi apri il sito nel browser, fai login con onionrings e controlla `/api/status`
 
 ## Server MCP: cosa viene copiato
 
-Solo `amazon`, `aliexpress`, `vinted`, `subito-search`, `facebook-marketplace` (non calendario, mail, telegram, whatsapp, ecc.) e solo `*.py`, `requirements.txt`, `README.md`. Esclusi:
+Solo `amazon`, `ebay`, `aliexpress`, `vinted`, `subito-search`, `facebook-marketplace` (non calendario, mail, telegram, whatsapp, ecc.) e solo `*.py`, `requirements.txt`, `README.md`. Esclusi:
 
 | Escluso | Motivo |
 |---|---|
@@ -127,7 +127,7 @@ Solo `amazon`, `aliexpress`, `vinted`, `subito-search`, `facebook-marketplace` (
 | `.venv/`, `__pycache__/` | non portabili da macOS arm64 a Linux |
 | `*.log`, `.env*`, `*token*`, `*secret*`, `*cookie*` | per sicurezza |
 
-Dipendenze (da `requirements.txt` di ciascun server): `mcp>=2.3,<3`, `curl_cffi>=0.13`, `beautifulsoup4>=4.12` (amazon, vinted, subito), più `cryptography>=45` per Facebook. Il deploy crea sul server: `mcp/.venv` (amazon+aliexpress+vinted), `mcp/subito-search/.venv`, e `mcp/facebook-marketplace/.venv` solo se Facebook non è in `MCP_DISABLED`. Se un `requirements.txt` mancasse, ricavalo localmente con `.venv/bin/pip freeze` (solo come suggerimento, da rivedere a mano).
+Dipendenze (da `requirements.txt` di ciascun server): `mcp>=2.3,<3`, `curl_cffi>=0.13`, `beautifulsoup4>=4.12` (amazon, ebay, vinted, subito), più `cryptography>=45` per Facebook. Il deploy crea sul server: `mcp/.venv` (amazon+ebay+aliexpress+vinted), `mcp/subito-search/.venv`, e `mcp/facebook-marketplace/.venv` solo se Facebook non è in `MCP_DISABLED`. Se un `requirements.txt` mancasse, ricavalo localmente con `.venv/bin/pip freeze` (solo come suggerimento, da rivedere a mano).
 
 ### Facebook Marketplace sul server
 

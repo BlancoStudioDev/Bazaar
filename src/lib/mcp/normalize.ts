@@ -362,6 +362,26 @@ export function normalizeToolOutput(
       return makeProduct("amazon", id, title, text(row.prezzo), num(row.prezzo_num), url, extras);
     });
     finishSearch("risultati", items, mapped);
+  } else if (server === "ebay") {
+    const items = asArray(record.risultati);
+    total = typeof record.totale === "number" ? record.totale : items.length;
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.url);
+      const id = text(row.id) || idFromUrl(url, `ebay-${index}`);
+      const feedback = text(row.feedback);
+      const seller = text(row.venditore);
+      const notes = [text(row.formato), text(row.spedizione)].filter(Boolean);
+      return makeProduct("ebay", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        condition: text(row.condizioni),
+        location: text(row.luogo),
+        seller: seller ? (feedback ? `${seller} (${feedback})` : seller) : "Venditore eBay",
+        extra: notes.length ? notes.join(" · ") : null,
+      });
+    });
+    finishSearch("risultati", items, mapped);
   } else if (server === "aliexpress") {
     const items = asArray(record.risultati);
     total = typeof record.totale === "number" ? record.totale : items.length;
@@ -516,6 +536,8 @@ function essential(row: Record<string, unknown>, server: MarketplaceId): Record<
   if (condition) out.condizione = condition;
   const place = text(row.luogo);
   if (place) out.luogo = place.slice(0, 40);
+  const format = text(row.formato);
+  if (format) out.formato = format;
   const url = shortUrl(row.url ?? row.link);
   if (url) out.url = url;
   // Solo i candidati arricchiti (vedi agent/enrich.ts) portano una descrizione.
@@ -547,7 +569,7 @@ export function compactToolOutputForModel(
   if (tool.startsWith("get_")) {
     const picked = pick(record, [
       "titolo", "title", "prezzo", "prezzo_num", "price", "brand", "condizioni",
-      "condizione", "disponibilita", "luogo", "venditore", "descrizione", "url", "valutazione", "stato",
+      "condizione", "disponibilita", "luogo", "venditore", "descrizione", "url", "valutazione", "stato", "formato", "spedizione",
     ]);
     if (typeof picked.descrizione === "string") picked.descrizione = picked.descrizione.slice(0, 900);
     if (typeof picked.url === "string") picked.url = shortUrl(picked.url);

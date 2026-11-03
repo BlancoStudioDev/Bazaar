@@ -1,6 +1,6 @@
 # bazaar
 
-Personal shopper conversazionale che cerca in tempo reale su cinque marketplace — **Amazon.it, AliExpress, Vinted, Subito.it e Facebook Marketplace** — confronta i prezzi e dice dove conviene comprare.
+Personal shopper conversazionale che cerca in tempo reale su sei marketplace — **Amazon.it, eBay.it, AliExpress, Vinted, Subito.it e Facebook Marketplace** — confronta i prezzi e dice dove conviene comprare.
 
 Non è un catalogo: è una chat. Scrivi cosa cerchi, Bazaar chiama i server MCP locali, normalizza gli annunci in schede prodotto e risponde con una raccomandazione secca, una tabella comparativa e i link agli annunci. I risultati restano anche nella **Bacheca**, ordinabili per prezzo o per fonte.
 
@@ -27,7 +27,7 @@ Non è un catalogo: è una chat. Scrivi cosa cerchi, Bazaar chiama i server MCP 
 
 ## Avvio
 
-Requisiti: Node.js 20+, npm, e i cinque server MCP già presenti in `~/.config/opencode/mcp/` (con i rispettivi virtualenv Python).
+Requisiti: Node.js 20+, npm, e i sei server MCP già presenti in `~/.config/opencode/mcp/` (con i rispettivi virtualenv Python).
 
 ```bash
 cd bazaar
@@ -60,9 +60,10 @@ npm start
 | `OPENROUTER_CHEAP_MODELS` | dinamico | Tier economico a pagamento (id separati da virgola). Default: i 3 modelli con tool support più economici del catalogo OpenRouter (gpt-oss, qwen, deepseek, gemini flash, llama, glm, mistral, gemma) sopra una soglia di qualità/contesto. |
 | `OPENROUTER_PAID_FALLBACK_MODEL` | `deepseek/deepseek-v4.1-flash` | Ultima riserva fissa, dopo free e tier economico (richiede il toggle nelle impostazioni). |
 | `MCP_ROOT` | `~/.config/opencode/mcp` | Radice dei server MCP. |
-| `MCP_PYTHON_SHARED` | `$MCP_ROOT/.venv/bin/python` | Python per Amazon, AliExpress, Vinted. |
+| `MCP_PYTHON_SHARED` | `$MCP_ROOT/.venv/bin/python` | Python per Amazon, eBay, AliExpress, Vinted. |
 | `MCP_PYTHON_SUBITO` | `$MCP_ROOT/subito-search/.venv/bin/python` | Python per Subito. |
 | `MCP_PYTHON_FACEBOOK` | `$MCP_ROOT/facebook-marketplace/.venv/bin/python` | Python per Facebook Marketplace. |
+| `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET` / `EBAY_ENV` | — | Opzionali: API ufficiali eBay Browse (gratuite, [developer.ebay.com](https://developer.ebay.com)); `EBAY_ENV=sandbox` per il sandbox. Senza, il server MCP legge ebay.it via scraping. |
 | `MCP_DISABLED` | — | Lista separata da virgole di server da non avviare (es. `aliexpress`). |
 
 La chiave resta nel processo Next.js: il browser chiama solo `/api/*`.
@@ -93,6 +94,7 @@ Next.js Route Handler
   │      │
   │      └─ mcp/manager.ts ─────► stdio ─► server MCP Python
   │                                         ├─ amazon
+  │                                         ├─ ebay
   │                                         ├─ aliexpress
   │                                         ├─ vinted
   │                                         ├─ subito-search
@@ -139,7 +141,7 @@ Alcuni modelli free (per esempio XingChen/TeleChat) non usano il canale nativo d
 
 ## API
 
-- `GET /api/status` — chiave OpenRouter, crediti, modelli free usati/limite, stato dei cinque server MCP e latenza di avvio.
+- `GET /api/status` — chiave OpenRouter, crediti, modelli free usati/limite, stato dei sei server MCP e latenza di avvio.
 - `GET /api/models` — registry dei modelli free, modello scelto, punteggi, riserva economica. `?refresh=1` forza l'aggiornamento.
 - `POST /api/chat` — body `{ messages, model?, marketplaces?, city?, allowPaidFallback? }`, risposta SSE.
 - `POST /api/share` (sessione richiesta) crea il link pubblico di una chat; `DELETE /api/share?token=` lo revoca. La pagina pubblica è `/s/<token>`.
@@ -163,6 +165,7 @@ Test diretto dei server MCP:
 
 ```bash
 node scripts/test-mcp.mjs amazon
+node scripts/test-mcp.mjs ebay
 node scripts/test-mcp.mjs vinted
 node scripts/test-mcp.mjs subito
 node scripts/test-mcp.mjs facebook-marketplace
@@ -184,7 +187,7 @@ Bazaar può girare su un server Linux dietro nginx/TLS con login (OIDC onionring
 
 Limiti noti:
 
-- I server MCP sono **condivisi** tra tutti gli utenti: marketplace con rate limit e anti-bot, e gli IP datacenter vengono bloccati più facilmente. Amazon, AliExpress, Vinted e Subito possono rispondere con blocchi dal server anche se in locale funzionano.
+- I server MCP sono **condivisi** tra tutti gli utenti: marketplace con rate limit e anti-bot, e gli IP datacenter vengono bloccati più facilmente. Amazon, eBay, AliExpress, Vinted e Subito possono rispondere con blocchi dal server anche se in locale funzionano.
 - **Facebook Marketplace è disabilitato sul server** (`MCP_DISABLED=facebook-marketplace`): legge i cookie dal profilo Chrome del Mac. I cookie manuali sono possibili ma sconsigliati (vedi `deploy/README.md`).
 - Le conversazioni restano in `localStorage` del browser, per utente e per dispositivo: non sono sincronizzate né recuperabili dal server.
 

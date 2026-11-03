@@ -101,15 +101,15 @@ rs "${RSYNC_FLAGS[@]}" \
 
 if [ "$SKIP_MCP" = 0 ]; then
   [ -d "$MCP_SRC" ] || { echo "MCP_SRC non trovato: $MCP_SRC" >&2; exit 1; }
-  say "rsync dei 5 server MCP (whitelist: solo sorgenti .py, requirements.txt, README.md)"
-  # Solo amazon, aliexpress, vinted, subito-search, facebook-marketplace (non calendario, mail, ecc.).
+  say "rsync dei 6 server MCP (whitelist: solo sorgenti .py, requirements.txt, README.md)"
+  # Solo amazon, ebay, aliexpress, vinted, subito-search, facebook-marketplace (non calendario, mail, ecc.).
   # File sensibili/inutili presenti nelle cartelle e quindi esclusi:
   #   facebook-marketplace/cookies_cache.json  cookie Facebook decifrati (!)
   #   facebook-marketplace/state.json, monitors.json, cookies.txt  stato/sessione
   #   subito-search/*_scan*.json, sweep_*.json, deepscan_results.json, alt_scan_out.txt  dump di test
   #   .venv/ (non portabile da macOS arm64 a Linux), __pycache__/
   # La whitelist (--include ... --exclude '*') li lascia fuori comunque; gli exclude espliciti sono una cintura in piu'.
-  for d in amazon aliexpress vinted subito-search facebook-marketplace; do
+  for d in amazon ebay aliexpress vinted subito-search facebook-marketplace; do
     [ -d "$MCP_SRC/$d" ] || { echo "Manca $MCP_SRC/$d" >&2; exit 1; }
     rs "${RSYNC_FLAGS[@]}" \
       --exclude '.venv/' --exclude '__pycache__/' --exclude '*.pyc' \
@@ -177,8 +177,8 @@ if [ "$SKIP_MCP" = 0 ]; then
     local args=(); for r in "\$@"; do args+=(-r "\$r"); done
     "\$venv/bin/python" -m pip install --quiet "\${args[@]}"
   }
-  echo "--> venv condiviso (amazon, aliexpress, vinted)"
-  mkvenv "\$MCP/.venv" "\$MCP/amazon/requirements.txt" "\$MCP/aliexpress/requirements.txt" "\$MCP/vinted/requirements.txt"
+  echo "--> venv condiviso (amazon, ebay, aliexpress, vinted)"
+  mkvenv "\$MCP/.venv" "\$MCP/amazon/requirements.txt" "\$MCP/ebay/requirements.txt" "\$MCP/aliexpress/requirements.txt" "\$MCP/vinted/requirements.txt"
   echo "--> venv subito-search"
   mkvenv "\$MCP/subito-search/.venv" "\$MCP/subito-search/requirements.txt"
   case ",\${MCP_DISABLED:-}," in
