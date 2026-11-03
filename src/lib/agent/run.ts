@@ -1,4 +1,5 @@
 import { explicitCityInText } from "@/lib/agent/city";
+import { enrichWithDescriptions } from "@/lib/agent/enrich";
 import { buildSystemPrompt } from "@/lib/agent/prompt";
 import { getMcpManager } from "@/lib/mcp/manager";
 import { toolLabel } from "@/lib/mcp/config";
@@ -7,6 +8,7 @@ import {
   filterOutputByCity,
   normalizeToolOutput,
   summarizeToolContentForModel,
+  type ToolOutput,
 } from "@/lib/mcp/normalize";
 import {
   OpenRouterError,
@@ -470,6 +472,10 @@ export async function runAgent(options: {
             },
             modelContent: JSON.stringify({ errore: `Tool sconosciuto: ${call.function.name}` }),
             products: [] as Product[],
+            output: null as ToolOutput | null,
+            server: null as MarketplaceId | null,
+            tool: "",
+            isError: true,
           };
         }
 
@@ -508,9 +514,30 @@ export async function runAgent(options: {
             ? JSON.stringify({ errore: updated.error || "Errore dal marketplace" })
             : modelContent,
           products: output.products,
+          output: output as ToolOutput | null,
+          server: resolved.server as MarketplaceId | null,
+          tool: resolved.tool,
+          isError,
         };
       }),
     );
+
+    // Descrizioni degli annunci: il modello le usa per verificare i vincoli dell'utente (quantità, kit, formato...).
+    const searches = executions.flatMap((e) =>
+      e.output && e.server && e.tool.startsWith("search_") && !e.isError
+        ? [{ e, server: e.server, tool: e.tool, output: e.output }]
+        : [],
+    );
+    if (searches.length) {
+      const changed = await enrichWithDescriptions(
+        searches.map((s) => ({ ...s, ok: true })),
+        signal,
+      );
+      for (const s of searches) {
+        s.e.modelContent = compactToolOutputForModel(s.server, s.tool, s.output);
+        if (changed) emit({ type: "activity", activity: { ...s.e.activity, products: s.output.products } });
+      }
+    }
 
     if (explicitCity) {
       const names: Record<string, string> = { subito: "Subito", "facebook-marketplace": "Facebook Marketplace" };
@@ -533,6 +560,14 @@ export async function runAgent(options: {
       last.modelContent += `\n[Riepilogo calcolato: prezzo numerico più basso tra tutti i risultati = ${cheapest.price} € — "${cheapest.title.slice(0, 80)}" su ${cheapest.marketplace}]`;
     }
 
+    {
+      const withDesc = executions.reduce((n, e) => n + e.modelContent.length, 0);
+      const descChars = executions.reduce(
+        (n, e) => n + (e.modelContent.match(/"descrizione":"(?:[^"\\]|\\.)*"/g) || []).reduce((s, m) => s + m.length, 0),
+        0,
+      );
+      console.log(`[bazaar] contenuto tool per il modello: ${withDesc} car. (di cui descrizioni ${descChars})`);
+    }
     for (const execution of executions) {
       foundProducts += execution.products.length;
       console.log(

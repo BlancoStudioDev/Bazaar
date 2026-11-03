@@ -198,6 +198,7 @@ const FAMILY_PRIORS: Array<[RegExp, number]> = [
   [/llama/i, 0.74],
   [/mistral|mixtral/i, 0.74],
   [/gemma/i, 0.69],
+  [/nemotron/i, 0.76],
   [/gpt-oss/i, 0.73],
   [/phi/i, 0.63],
   [/xingchen|telechat/i, 0.62],
@@ -235,7 +236,7 @@ function scoreModel(
     ) * 100,
   );
   const reliability = Math.round(clamp((metrics.uptime ?? 80) / 100) * 100);
-  const overall = Math.round(intelligence * 0.5 + speed * 0.35 + reliability * 0.15);
+  const overall = Math.round(intelligence * 0.7 + speed * 0.2 + reliability * 0.1);
   return { intelligence, speed, reliability, overall };
 }
 
@@ -373,7 +374,7 @@ function buildCheapModel(raw: RawModel): FreeModel {
       intelligence,
       speed,
       reliability: 85,
-      overall: Math.round(intelligence * 0.5 + speed * 0.35 + 85 * 0.15),
+      overall: Math.round(intelligence * 0.7 + speed * 0.2 + 85 * 0.1),
     },
     reason: labels.pricePerMillion != null ? `A pagamento, ~${formatUsd(labels.pricePerMillion)} / 1M token.` : "A pagamento.",
     isPaid: true,

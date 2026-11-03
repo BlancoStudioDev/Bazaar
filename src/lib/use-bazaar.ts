@@ -15,6 +15,7 @@ import type {
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
 import { apiPath } from "@/lib/base-path";
 import { conversationTitle, uid } from "@/lib/ui";
+import { dropSuspiciousPrices } from "@/lib/mcp/plausibility";
 
 const LEGACY_CONVERSATIONS_KEY = "bazaar.conversations.v1";
 const LEGACY_SETTINGS_KEY = "bazaar.settings.v1";
@@ -22,6 +23,8 @@ const conversationsKey = (userId: string) => `${LEGACY_CONVERSATIONS_KEY}.u.${us
 const settingsKey = (userId: string) => `${LEGACY_SETTINGS_KEY}.u.${userId}`;
 const MAX_CONVERSATIONS = 40;
 const MAX_MESSAGES = 80;
+
+export type ShareResult = { ok: true; url: string; token: string } | { ok: false; error: string };
 
 export interface Settings {
   modelMode: "auto" | "manual";
@@ -691,6 +694,87 @@ export function useBazaar(userId: string) {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  /** Crea uno snapshot pubblico della chat attiva (o restituisce il link già esistente). */
+  const shareConversation = useCallback(async (): Promise<ShareResult> => {
+    const conversation = activeConversation;
+    if (!conversation) return { ok: false, error: "Apri una chat prima di condividerla." };
+    if (conversation.shareToken && conversation.shareUrl) {
+      return { ok: true, url: conversation.shareUrl, token: conversation.shareToken };
+    }
+    const messages = conversation.messages
+      .filter((message) => message.status !== "streaming" && message.content.trim())
+      .slice(-60);
+    const all = messages.flatMap((message) => message.products || []);
+    const kept = new Set(dropSuspiciousPrices(all));
+    const payload = {
+      title: conversation.title,
+      chatDate: conversation.createdAt,
+      messages: messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+        products: (message.products || [])
+          .filter((product) => kept.has(product))
+          .map((product) => ({
+            title: product.title,
+            price: product.price,
+            priceLabel: product.priceLabel,
+            marketplace: product.marketplace,
+            id: product.id,
+            url: product.url,
+            image: product.image,
+            condition: product.condition,
+            location: product.location,
+          })),
+      })),
+    };
+    try {
+      const response = await fetch(apiPath("/api/share"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json().catch(() => ({}))) as { token?: string; url?: string; error?: string };
+      if (!response.ok || !data.token || !data.url) {
+        return { ok: false, error: data.error || "Non sono riuscito a creare il link. Riprova." };
+      }
+      const { token, url } = data;
+      setConversations((prev) =>
+        prev.map((item) => (item.id === conversation.id ? { ...item, shareToken: token, shareUrl: url } : item)),
+      );
+      return { ok: true, url, token };
+    } catch {
+      return { ok: false, error: "Non sono riuscito a creare il link. Controlla la connessione e riprova." };
+    }
+  }, [activeConversation]);
+
+  /** Revoca il link pubblico della chat attiva. */
+  const unshareConversation = useCallback(async (): Promise<{ ok: true } | { ok: false; error: string }> => {
+    const conversation = activeConversation;
+    if (!conversation?.shareToken) return { ok: true };
+    try {
+      const response = await fetch(`${apiPath("/api/share")}?token=${encodeURIComponent(conversation.shareToken)}`, {
+        method: "DELETE",
+      });
+      // 404 = già revocato o inesistente: per l'utente è lo stesso risultato.
+      if (!response.ok && response.status !== 404) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        return { ok: false, error: data.error || "Non sono riuscito a interrompere la condivisione. Riprova." };
+      }
+      setConversations((prev) =>
+        prev.map((item) => {
+          if (item.id !== conversation.id) return item;
+          const { shareToken: _token, shareUrl: _url, ...rest } = item;
+          void _token;
+          void _url;
+          return rest;
+        }),
+      );
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "Non sono riuscito a interrompere la condivisione. Controlla la connessione e riprova." };
+    }
+  }, [activeConversation]);
+
   const clearAllConversations = useCallback(() => {
     abortRef.current?.abort();
     setConversations([]);
@@ -723,6 +807,8 @@ export function useBazaar(userId: string) {
     refreshStatus,
     reconnect,
     clearAllConversations,
+    shareConversation,
+    unshareConversation,
   };
 }
 

@@ -68,6 +68,29 @@ function imageUrl(value: unknown): string | null {
   return raw || null;
 }
 
+/** Testo di descrizione pulito per il modello: niente HTML, URL, hashtag; spazi compattati; troncato. */
+export function cleanDescription(value: unknown, max = 300): string | null {
+  const raw = Array.isArray(value) ? value.filter((v) => typeof v === "string").join(" | ") : value;
+  if (typeof raw !== "string") return null;
+  const cleaned = raw
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/https?:\/\/\S+|www\.\S+/gi, " ")
+    .replace(/(^|\s)#[\p{L}\p{N}_]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return null;
+  return cleaned.length > max ? `${cleaned.slice(0, max - 1).trimEnd()}…` : cleaned;
+}
+
+/** Descrizione dal risultato di un tool di dettaglio (descrizione, oppure elenco caratteristiche). */
+export function descriptionFromDetail(data: unknown, max = 300): string | null {
+  const record = asRecord(data);
+  if (!record) return null;
+  return cleanDescription(record.descrizione ?? record.description, max) || cleanDescription(record.caratteristiche, max);
+}
+
 function idFromUrl(url: string, fallback: string): string {
   if (!url) return fallback;
   try {
@@ -393,6 +416,7 @@ export function normalizeToolOutput(
       const id = idFromUrl(url, `subito-${index}`);
       const date = text(row.data);
       return makeProduct("subito", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo), url, {
+        image: imageUrl(row.immagine),
         condition: "Usato",
         location: text(row.luogo),
         seller: "Venditore Subito",
@@ -433,7 +457,7 @@ export function normalizeToolOutput(
       condition: text(detail.condizioni) || text(detail.condizione) || "Nuovo",
       location: text(detail.luogo),
       seller: text(detail.venditore),
-      extra: text(detail.descrizione)?.slice(0, 220) || null,
+      extra: descriptionFromDetail(detail, 300),
     };
     const product = makeProduct(server, id, title, priceLabel, price, url, extras);
     products = product ? [product] : [];
@@ -494,6 +518,9 @@ function essential(row: Record<string, unknown>, server: MarketplaceId): Record<
   if (place) out.luogo = place.slice(0, 40);
   const url = shortUrl(row.url ?? row.link);
   if (url) out.url = url;
+  // Solo i candidati arricchiti (vedi agent/enrich.ts) portano una descrizione.
+  const description = cleanDescription(row.descrizione, 240);
+  if (description) out.descrizione = description;
   return out;
 }
 

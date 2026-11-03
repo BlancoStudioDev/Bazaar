@@ -8,6 +8,7 @@ import { ConnectionsDialog } from "@/components/connections-dialog";
 import { ModelDialog } from "@/components/model-dialog";
 import { ResultsBoard } from "@/components/results-board";
 import { Sidebar } from "@/components/sidebar";
+import { SharePopover } from "@/components/share-popover";
 import type { ClientUser } from "@/components/home-client";
 import { Spinner } from "@/components/ui";
 import type { BazaarStore } from "@/lib/use-bazaar";
@@ -147,6 +148,8 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
               <span className="font-mono text-[12px] text-muted">{productCount}</span>
             </button>
           ) : null}
+
+          <SharePopover store={store} />
 
           <button
             type="button"

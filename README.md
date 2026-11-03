@@ -67,6 +67,10 @@ npm start
 
 La chiave resta nel processo Next.js: il browser chiama solo `/api/*`.
 
+## Condividere le chat
+
+Dalla chat, il pulsante **Condividi** (icona nell'intestazione) crea un link pubblico di sola lettura (`/s/<token>`): chi lo riceve vede la chat e la Bacheca senza fare login. Il link mostra uno **snapshot** (testo dei messaggi, prodotti con titolo, prezzo, marketplace, link e immagine, titolo e data): non include argomenti dei tool, modello usato né dati dell'utente, e non si aggiorna con i messaggi successivi. **Smetti di condividere** lo revoca (da quel momento 404). Gli snapshot stanno in SQLite (`SHARE_DB_PATH`, default `./data/shares.sqlite`); token casuali da 192 bit, pagina `noindex` e `Referrer-Policy: no-referrer`. Limite: `SHARE_RATE_PER_HOUR` link/ora per utente (default 20). Solo `/s/*` è pubblica; `POST/DELETE /api/share` richiedono la sessione.
+
 ## Costi e provider
 
 L'obiettivo è costo zero. I provider con chiave presente vengono provati in quest'ordine:
@@ -138,6 +142,7 @@ Alcuni modelli free (per esempio XingChen/TeleChat) non usano il canale nativo d
 - `GET /api/status` — chiave OpenRouter, crediti, modelli free usati/limite, stato dei cinque server MCP e latenza di avvio.
 - `GET /api/models` — registry dei modelli free, modello scelto, punteggi, riserva economica. `?refresh=1` forza l'aggiornamento.
 - `POST /api/chat` — body `{ messages, model?, marketplaces?, city?, allowPaidFallback? }`, risposta SSE.
+- `POST /api/share` (sessione richiesta) crea il link pubblico di una chat; `DELETE /api/share?token=` lo revoca. La pagina pubblica è `/s/<token>`.
 
 ## Test rapidi
 

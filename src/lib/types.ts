@@ -68,6 +68,9 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];
+  /** Link pubblico di sola lettura, se la chat è condivisa (token + URL completo). */
+  shareToken?: string;
+  shareUrl?: string;
 }
 
 export interface ModelMetrics {
