@@ -4,6 +4,7 @@ import { getMcpManager } from "@/lib/mcp/manager";
 import { toolLabel } from "@/lib/mcp/config";
 import {
   compactToolOutputForModel,
+  filterOutputByCity,
   normalizeToolOutput,
   summarizeToolContentForModel,
 } from "@/lib/mcp/normalize";
@@ -306,7 +307,8 @@ export async function runAgent(options: {
 
   const settingsCity = (body.city || "Milano").trim() || "Milano";
   // La città delle Impostazioni vince, salvo che l'ultimo messaggio ne nomini esplicitamente un'altra.
-  const city = explicitCityInText(history[history.length - 1].content) || settingsCity;
+  const explicitCity = explicitCityInText(history[history.length - 1].content);
+  const city = explicitCity || settingsCity;
   const requestedMarketplaces = Array.isArray(body.marketplaces)
     ? body.marketplaces.filter((id): id is MarketplaceId =>
         ["amazon", "aliexpress", "vinted", "subito", "facebook-marketplace"].includes(id),
@@ -370,8 +372,9 @@ export async function runAgent(options: {
       // Dopo il primo giro con risultati sufficienti il modello deve solo rispondere:
       // un secondo giro di raffinamento costa token e spesso torna a 0.
       tools: round > 0 && foundProducts >= 3 ? [] : tools,
-      // Primo messaggio della conversazione: una ricerca reale è obbligatoria, niente prezzi inventati.
-      toolChoice: round === 0 && history.length <= 1 ? "required" : "auto",
+      // Ogni messaggio dell'utente richiede una ricerca reale: le risposte precedenti non contengono i dati dei tool,
+      // quindi senza nuova ricerca il modello inventerebbe (es. località) da una risposta già scritta.
+      toolChoice: round === 0 ? "required" : "auto",
       signal,
       emit,
     });
@@ -480,7 +483,10 @@ export async function runAgent(options: {
         emit({ type: "activity", activity: { ...activity, args } });
 
         const raw = await manager.callTool(resolved.server, resolved.tool, args);
-        const output = normalizeToolOutput(resolved.server, resolved.tool, raw.text);
+        const rawOutput = normalizeToolOutput(resolved.server, resolved.tool, raw.text);
+        const output = explicitCity
+          ? filterOutputByCity(resolved.server, rawOutput, explicitCity)
+          : rawOutput;
         const isError = raw.isError || Boolean(output.error);
         const modelContent = compactToolOutputForModel(resolved.server, resolved.tool, output);
         const updated: ToolActivity = {
@@ -504,6 +510,18 @@ export async function runAgent(options: {
         };
       }),
     );
+
+    if (explicitCity) {
+      const names: Record<string, string> = { subito: "Subito", "facebook-marketplace": "Facebook Marketplace" };
+      const local = executions.filter((e) => e.activity.server in names && e.activity.status === "done");
+      if (local.length) {
+        const parts = local.map((e) => `${names[e.activity.server]} ${e.activity.count ?? 0}`);
+        emit({
+          type: "notice",
+          message: `Annunci locali a ${explicitCity}: ${parts.join(" · ")}. Amazon, AliExpress e Vinted spediscono da altrove.`,
+        });
+      }
+    }
 
     const priced = executions
       .flatMap((execution) => execution.products)

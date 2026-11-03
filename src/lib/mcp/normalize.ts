@@ -533,7 +533,10 @@ export function compactToolOutputForModel(
     return row ? essential(row, server) : item;
   });
 
-  const extraNote = record.scartati_sospetti ? { scartati_sospetti: record.scartati_sospetti } : {};
+  const cityNote = record.filtro_citta
+    ? { nota: items.length ? `solo annunci a ${record.filtro_citta}` : `NESSUN annuncio a ${record.filtro_citta}: dillo esplicitamente all'utente` }
+    : {};
+  const extraNote = { ...(record.scartati_sospetti ? { scartati_sospetti: record.scartati_sospetti } : {}), ...cityNote };
   let payload = JSON.stringify({ fonte: server, totale: record.totale ?? items.length, ...extraNote, risultati: compactItems });
   // Se supera il tetto, riduci gli item invece di troncare il JSON a metà.
   let keep = compactItems.length;
@@ -563,4 +566,37 @@ export function summarizeToolContentForModel(content: string): string {
   } catch {
     return content.slice(0, 300);
   }
+}
+
+
+const LOCATED_SERVERS = new Set<MarketplaceId>(["subito", "facebook-marketplace"]);
+
+function foldPlace(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * Se l'utente ha nominato una città, gli annunci locali (Subito, Facebook) devono
+ * trovarsi lì: il modello non deve poter "dedurre" una località che l'annuncio non ha.
+ * I marketplace senza località (Amazon, AliExpress, Vinted) restano invariati.
+ */
+export function filterOutputByCity(server: MarketplaceId, output: ToolOutput, city: string): ToolOutput {
+  if (!LOCATED_SERVERS.has(server) || !city.trim()) return output;
+  const wanted = foldPlace(city.trim());
+  const matches = (place: unknown) => typeof place === "string" && foldPlace(place).includes(wanted);
+
+  const products = output.products.filter((product) => matches(product.location));
+  let data = output.data;
+  const record = asRecord(output.data);
+  if (record) {
+    const key = ["risultati", "annunci", "items", "listings"].find((k) => Array.isArray(record[k]));
+    if (key) {
+      const kept = (record[key] as unknown[]).filter((item) => {
+        const row = asRecord(item);
+        return row ? matches(row.luogo ?? row.location ?? row.citta) : false;
+      });
+      data = { ...record, [key]: kept, totale: kept.length, filtro_citta: city };
+    }
+  }
+  return { ...output, products, data };
 }
