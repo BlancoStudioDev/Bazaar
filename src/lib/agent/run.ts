@@ -162,7 +162,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 function isRetryableModelError(error: unknown): boolean {
   if (error instanceof OpenRouterError) {
-    return [400, 404, 408, 413, 429, 500, 502, 503, 504].includes(error.status) || error.status === 0;
+    return [400, 403, 404, 408, 413, 429, 500, 502, 503, 504].includes(error.status) || error.status === 0;
   }
   return error instanceof TypeError;
 }
