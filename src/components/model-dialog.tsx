@@ -6,6 +6,7 @@ import { Check, ChevronDown, RefreshCw, TriangleAlert } from "lucide-react";
 import { Modal, ScoreBar, Spinner } from "@/components/ui";
 import type { BazaarStore } from "@/lib/use-bazaar";
 import type { FreeModel } from "@/lib/types";
+import { useT } from "@/lib/i18n/client";
 import { cn, formatTokens, modelShortName } from "@/lib/ui";
 
 function Radio({ selected }: { selected: boolean }) {
@@ -31,6 +32,7 @@ function ModelRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { t, lang } = useT();
   const [details, setDetails] = useState(false);
   return (
     <li className={cn("rounded-xl border", selected ? "border-ink" : "border-line")}>
@@ -47,11 +49,11 @@ function ModelRow({
               {modelShortName(model.name)}
             </span>
             <span className="block truncate text-[12px] text-muted">
-              {model.provider} · {model.isRouter ? "router gratuito" : "gratuito"}
+              {model.provider} · {model.isRouter ? t("model.freeRouter") : t("model.free")}
             </span>
             {model.isRouter ? (
               <span className="block text-[12px] text-muted">
-                OpenRouter sceglie da solo un modello gratuito disponibile.
+                {t("model.routerDesc")}
               </span>
             ) : null}
           </span>
@@ -60,23 +62,25 @@ function ModelRow({
           type="button"
           onClick={() => setDetails((value) => !value)}
           aria-expanded={details}
-          aria-label={`Dettagli di ${modelShortName(model.name)}`}
+          aria-label={t("model.detailsOf", { name: modelShortName(model.name) })}
           className="flex h-12 items-center gap-1 px-3 text-[12px] text-muted transition hover:text-ink"
         >
-          Dettagli
+          {t("model.details")}
           <ChevronDown className={cn("h-4 w-4 transition", details && "rotate-180")} />
         </button>
       </div>
       {details ? (
         <div className="border-t border-line px-4 py-3">
           <div className="grid grid-cols-3 gap-4">
-            <ScoreBar label="Intelligenza" value={model.scores.intelligence} compact />
-            <ScoreBar label="Velocità" value={model.scores.speed} compact />
-            <ScoreBar label="Affidabilità" value={model.scores.reliability} compact />
+            <ScoreBar label={t("model.intelligence")} value={model.scores.intelligence} compact />
+            <ScoreBar label={t("model.speed")} value={model.scores.speed} compact />
+            <ScoreBar label={t("model.reliability")} value={model.scores.reliability} compact />
           </div>
           <p className="mt-3 text-[12px] text-muted">
-            {formatTokens(model.contextLength)} di contesto
-            {model.metrics.latencyMs ? ` · latenza ${(model.metrics.latencyMs / 1000).toFixed(1)} s` : ""}
+            {t("model.context", { tokens: formatTokens(model.contextLength, lang) })}
+            {model.metrics.latencyMs
+              ? ` · ${t("model.latency", { seconds: (model.metrics.latencyMs / 1000).toFixed(1) })}`
+              : ""}
             {model.metrics.throughput ? ` · ${Math.round(model.metrics.throughput)} token/s` : ""}
           </p>
         </div>
@@ -96,6 +100,7 @@ export function ModelDialog({
   onClose: () => void;
   onBack?: () => void;
 }) {
+  const { t } = useT();
   const registry = store.modelRegistry;
   const autoSelected = store.settings.modelMode === "auto";
   const selected = useMemo(() => {
@@ -112,18 +117,18 @@ export function ModelDialog({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Modello" width="max-w-[560px]">
+    <Modal open={open} onClose={onClose} title={t("model.title")} width="max-w-[560px]">
       {!registry ? (
         <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-muted">
           <Spinner className="h-4 w-4 text-accent" />
-          Leggo i modelli disponibili…
+          {t("model.loading")}
         </div>
       ) : (
         <div>
           <div className="mb-4 flex items-center justify-between gap-4">
             <p className="text-[13px] text-muted">
-              In uso:{" "}
-              <span className="text-ink">{selected ? modelShortName(selected.name) : "nessuno"}</span>
+              {t("model.inUse")}{" "}
+              <span className="text-ink">{selected ? modelShortName(selected.name) : t("model.none")}</span>
             </p>
             <button
               type="button"
@@ -132,14 +137,14 @@ export function ModelDialog({
               className="btn-quiet shrink-0"
             >
               <RefreshCw className={cn("h-4 w-4", store.modelsLoading && "animate-spin")} />
-              Aggiorna
+              {t("model.refresh")}
             </button>
           </div>
 
           {store.modelsError ? (
             <p className="mb-4 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              {store.modelsError}. Uso la configurazione di riserva.
+              {t("model.errorFallback", { error: store.modelsError })}
             </p>
           ) : null}
 
@@ -153,9 +158,9 @@ export function ModelDialog({
               >
                 <Radio selected={autoSelected} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-medium text-ink">Automatico (consigliato)</span>
+                  <span className="block text-[13px] font-medium text-ink">{t("model.auto")}</span>
                   <span className="block text-[12px] text-muted">
-                    Bazaar sceglie il modello gratuito migliore e cambia se è saturo.
+                    {t("model.autoDesc")}
                   </span>
                 </span>
               </button>
@@ -181,9 +186,9 @@ export function ModelDialog({
 
           {registry.cheapModels?.length ? (
             <section className="mt-5">
-              <h3 className="text-[13px] font-medium text-ink">Se i gratuiti non bastano (a pagamento)</h3>
+              <h3 className="text-[13px] font-medium text-ink">{t("model.paidTitle")}</h3>
               <p className="mt-1 text-[12px] text-muted">
-                Usati solo se attivi la riserva a pagamento nelle impostazioni, dal più economico. Costo stimato per 1M token.
+                {t("model.paidDesc")}
               </p>
               <ul className="mt-2 space-y-1">
                 {registry.cheapModels.map((model) => (
@@ -195,7 +200,7 @@ export function ModelDialog({
                     <span className="shrink-0 text-muted">
                       {model.pricePerMillion != null
                         ? `~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)} / 1M`
-                        : "prezzo n/d"}
+                        : t("model.priceNa")}
                     </span>
                   </li>
                 ))}
@@ -205,7 +210,7 @@ export function ModelDialog({
 
           {onBack ? (
             <button type="button" onClick={onBack} className="btn-quiet mt-4">
-              Torna alle impostazioni
+              {t("model.back")}
             </button>
           ) : null}
         </div>

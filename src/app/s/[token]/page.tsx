@@ -5,13 +5,18 @@ import { Suspense } from "react";
 import { SharedChat } from "@/app/s/[token]/shared-chat";
 import { isValidShareToken } from "@/lib/share/snapshot";
 import { getActiveShare } from "@/lib/share/store";
+import { t } from "@/lib/i18n";
+import { requestLang } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Chat condivisa — Bazaar",
-  description: "Una ricerca fatta su Bazaar, condivisa in sola lettura.",
-  robots: { index: false, follow: false, nocache: true, noarchive: true },
-  referrer: "no-referrer",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = await requestLang();
+  return {
+    title: t(lang, "sp.metaTitle"),
+    description: t(lang, "sp.metaDescription"),
+    robots: { index: false, follow: false, nocache: true, noarchive: true },
+    referrer: "no-referrer",
+  };
+}
 
 async function Content({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -19,7 +24,7 @@ async function Content({ params }: { params: Promise<{ token: string }> }) {
   if (!isValidShareToken(token)) notFound();
   const share = getActiveShare(token);
   if (!share) notFound();
-  return <SharedChat snapshot={share.snapshot} sharedAt={share.createdAt} />;
+  return <SharedChat snapshot={share.snapshot} sharedAt={share.createdAt} lang={await requestLang()} />;
 }
 
 export default function SharedPage(props: { params: Promise<{ token: string }> }) {

@@ -9,8 +9,10 @@ import { cn, formatDuration, marketplaceName } from "@/lib/ui";
 import { Spinner } from "@/components/ui";
 import { useStatusPhrase } from "@/components/brand/themed-status";
 import { summaryPhrase } from "@/lib/brand/phrases";
+import { useT } from "@/lib/i18n/client";
 
 function ActivityRow({ activity }: { activity: ToolActivity }) {
+  const { t, lang } = useT();
   const meta = MARKETPLACES[activity.server as keyof typeof MARKETPLACES];
   const query = typeof activity.args.query === "string" ? activity.args.query : null;
 
@@ -32,11 +34,11 @@ function ActivityRow({ activity }: { activity: ToolActivity }) {
         </p>
         <p className="text-[12px] text-muted">
           {activity.status === "running"
-            ? "In corso…"
+            ? t("act.running")
             : activity.status === "error"
-              ? activity.error || "Non riuscita"
-              : `${activity.count ?? 0} ${activity.count === 1 ? "risultato" : "risultati"}`}
-          {activity.durationMs != null ? ` · ${formatDuration(activity.durationMs)}` : ""}
+              ? activity.error || t("act.failed")
+              : t("act.results", { count: activity.count ?? 0 })}
+          {activity.durationMs != null ? ` · ${formatDuration(activity.durationMs, lang)}` : ""}
         </p>
       </div>
     </li>
@@ -56,6 +58,7 @@ export function ActivityTimeline({
   startedAt: number;
   hasText?: boolean;
 }) {
+  const { lang } = useT();
   const [open, setOpen] = useState(false);
   const livePhrase = useStatusPhrase({ messageId, startedAt, activities, hasText, active: streaming });
   const stats = useMemo(() => {
@@ -72,7 +75,7 @@ export function ActivityTimeline({
 
   const summary = streaming
     ? livePhrase
-    : `${summaryPhrase({ sources: stats.sources, products: stats.results, failed: stats.errors })}`;
+    : summaryPhrase({ sources: stats.sources, products: stats.results, failed: stats.errors, lang });
   const names = Array.from(new Set(activities.map((activity) => marketplaceName(activity.server))));
 
   return (

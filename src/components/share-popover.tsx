@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy, Link2Off, Share2 } from "lucide-react";
 
 import { Spinner } from "@/components/ui";
+import { useT } from "@/lib/i18n/client";
 import type { BazaarStore } from "@/lib/use-bazaar";
 
 type Phase = "idle" | "creating" | "ready" | "error" | "confirm-stop" | "stopping";
 
 /** Pulsante «Condividi» con popover: crea il link pubblico, lo copia, permette di revocarlo. */
 export function SharePopover({ store }: { store: BazaarStore }) {
+  const { t } = useT();
   const conversation = store.activeConversation;
   const existingUrl = conversation?.shareUrl && conversation.shareToken ? conversation.shareUrl : null;
 
@@ -118,10 +120,10 @@ export function SharePopover({ store }: { store: BazaarStore }) {
         onClick={onToggle}
         disabled={store.isStreaming}
         className="icon-btn relative disabled:opacity-50"
-        aria-label={shared ? "Condividi, chat già condivisa" : "Condividi"}
+        aria-label={shared ? t("share.buttonShared") : t("share.button")}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={store.isStreaming ? "Attendi la fine della ricerca per condividere" : "Condividi"}
+        title={store.isStreaming ? t("share.wait") : t("share.button")}
       >
         <Share2 className="h-4 w-4" aria-hidden />
         {shared ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" aria-hidden /> : null}
@@ -130,25 +132,25 @@ export function SharePopover({ store }: { store: BazaarStore }) {
       {open ? (
         <div
           role="dialog"
-          aria-label="Condividi la chat"
+          aria-label={t("share.dialog")}
           className="fixed inset-x-4 top-[72px] z-50 rounded-2xl border border-line bg-paper p-4 shadow-[0_18px_48px_rgba(23,21,18,0.18)] animate-fade-up sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[372px]"
         >
-          <h2 className="font-serif text-[24px] leading-none tracking-[-0.02em] text-ink">Condividi la chat</h2>
+          <h2 className="font-serif text-[24px] leading-none tracking-[-0.02em] text-ink">{t("share.dialog")}</h2>
 
           {phase === "creating" || (phase === "idle" && !url) ? (
             <p className="mt-4 flex items-center gap-2 text-[13px] text-ink-2" role="status">
               <Spinner className="h-4 w-4 text-accent" />
-              Sto creando il link…
+              {t("share.creating")}
             </p>
           ) : null}
 
           {phase === "error" ? (
             <div className="mt-3">
               <p className="text-[13px] leading-relaxed text-rose-800" role="alert">
-                {error || "Non sono riuscito a creare il link. Riprova."}
+                {error || t("share.createError")}
               </p>
               <button type="button" onClick={() => void create()} className="btn-quiet mt-3">
-                Riprova
+                {t("common.retry")}
               </button>
             </div>
           ) : null}
@@ -156,11 +158,10 @@ export function SharePopover({ store }: { store: BazaarStore }) {
           {url && phase !== "creating" && phase !== "error" ? (
             <div className="mt-3">
               <p className="text-[13px] leading-relaxed text-ink-2">
-                Chiunque abbia il link può leggere questa chat, senza accedere. Mostra la chat com&apos;era al momento
-                della condivisione.
+                {t("share.info")}
               </p>
               <label htmlFor="share-url" className="meta mt-4 block uppercase">
-                Link pubblico
+                {t("share.link")}
               </label>
               <div className="mt-1.5 flex gap-2">
                 <input
@@ -173,14 +174,14 @@ export function SharePopover({ store }: { store: BazaarStore }) {
                 />
                 <button type="button" onClick={() => void copy(url)} className="btn-quiet shrink-0">
                   {copied === "yes" ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
-                  {copied === "yes" ? "Copiato" : "Copia"}
+                  {copied === "yes" ? t("common.copied") : t("common.copy")}
                 </button>
               </div>
               <p className="mt-2 min-h-[18px] text-[12px] text-muted" role="status">
                 {copied === "yes"
-                  ? "Link copiato negli appunti."
+                  ? t("share.linkCopied")
                   : copied === "manual"
-                    ? "Non posso usare gli appunti: seleziona il link e copialo a mano."
+                    ? t("share.copyManual")
                     : ""}
               </p>
               {error ? (
@@ -192,7 +193,7 @@ export function SharePopover({ store }: { store: BazaarStore }) {
               {phase === "confirm-stop" ? (
                 <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3">
                   <p className="text-[13px] leading-relaxed text-rose-900">
-                    Il link smetterà di funzionare per tutti. Potrai crearne uno nuovo quando vuoi.
+                    {t("share.confirm")}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -201,10 +202,10 @@ export function SharePopover({ store }: { store: BazaarStore }) {
                       className="inline-flex min-h-10 items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-paper transition hover:bg-ink/85"
                     >
                       <Link2Off className="h-4 w-4" aria-hidden />
-                      Smetti di condividere
+                      {t("share.stop")}
                     </button>
                     <button type="button" onClick={() => setPhase("ready")} className="btn-quiet">
-                      Annulla
+                      {t("common.cancel")}
                     </button>
                   </div>
                 </div>
@@ -219,7 +220,7 @@ export function SharePopover({ store }: { store: BazaarStore }) {
                   className="mt-1 inline-flex min-h-10 items-center gap-2 text-[13px] font-medium text-ink-2 underline decoration-line underline-offset-4 transition hover:text-ink disabled:opacity-50"
                 >
                   {phase === "stopping" ? <Spinner className="h-4 w-4" /> : <Link2Off className="h-4 w-4" aria-hidden />}
-                  Smetti di condividere
+                  {t("share.stop")}
                 </button>
               )}
             </div>

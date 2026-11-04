@@ -5,6 +5,7 @@ import { Loader2, X } from "lucide-react";
 
 import { MARKETPLACES } from "@/lib/marketplaces";
 import type { MarketplaceId } from "@/lib/types";
+import { useT } from "@/lib/i18n/client";
 import { cn, clamp, scoreTone } from "@/lib/ui";
 
 export function MarketplaceDot({
@@ -109,6 +110,7 @@ export function Modal({
   children: ReactNode;
   width?: string;
 }) {
+  const { t } = useT();
   useEffect(() => {
     if (!open) return;
     const previous = document.body.style.overflow;
@@ -130,7 +132,7 @@ export function Modal({
       <button
         type="button"
         className="absolute inset-0 cursor-default bg-ink/35 animate-fade-in"
-        aria-label="Chiudi"
+        aria-label={t("common.close")}
         onClick={onClose}
       />
       <div
@@ -155,7 +157,7 @@ export function Modal({
             type="button"
             onClick={onClose}
             className="icon-btn shrink-0"
-            aria-label="Chiudi"
+            aria-label={t("common.close")}
           >
             <X className="h-4 w-4" />
           </button>

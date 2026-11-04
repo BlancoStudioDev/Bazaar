@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, SlidersHorizontal, Square } from "lucide-react";
 
 import type { BazaarStore } from "@/lib/use-bazaar";
+import { useT } from "@/lib/i18n/client";
 import { cn } from "@/lib/ui";
 import { Spinner } from "@/components/ui";
-
-const PLACEHOLDER = "Cosa vuoi comprare? Es. una RTX 4070 usata a Milano";
 
 export function Composer({
   store,
@@ -16,6 +15,7 @@ export function Composer({
   store: BazaarStore;
   onOpenSettings: () => void;
 }) {
+  const { t } = useT();
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [focused, setFocused] = useState(false);
@@ -57,7 +57,9 @@ export function Composer({
   const local = store.settings.enabledMarketplaces.some(
     (id) => id === "facebook-marketplace" || id === "subito",
   );
-  const scope = `${enabled} marketplace${local ? ` · ${store.settings.city.trim() || "Milano"}` : ""}`;
+  const scope = local
+    ? t("composer.scopeCity", { count: enabled, city: store.settings.city.trim() || "Milano" })
+    : t("composer.scope", { count: enabled });
 
   return (
     <div className="composer-wrap">
@@ -70,8 +72,8 @@ export function Composer({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           rows={1}
-          placeholder={PLACEHOLDER}
-          aria-label="Cosa vuoi cercare?"
+          placeholder={t("composer.placeholder")}
+          aria-label={t("composer.aria")}
           className="composer-input"
         />
         <div className="composer-footer">
@@ -79,7 +81,7 @@ export function Composer({
             type="button"
             onClick={onOpenSettings}
             className="inline-flex min-h-10 min-w-0 items-center gap-2 rounded-full px-3 text-[12px] text-muted transition hover:bg-paper-2 hover:text-ink"
-            aria-label={`Dove cerco: ${scope}. Apri le impostazioni`}
+            aria-label={t("composer.where", { scope })}
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
             <span className="truncate">{scope}</span>
@@ -90,7 +92,7 @@ export function Composer({
                 type="button"
                 onClick={store.stop}
                 className="composer-send is-stop"
-                aria-label="Interrompi la ricerca"
+                aria-label={t("composer.stop")}
               >
                 <Square className="h-4 w-4 fill-current" />
               </button>
@@ -100,7 +102,7 @@ export function Composer({
                 onClick={submit}
                 disabled={!value.trim()}
                 className="composer-send"
-                aria-label="Cerca"
+                aria-label={t("composer.send")}
               >
                 {store.modelsLoading && !store.modelRegistry ? (
                   <Spinner className="h-4 w-4" />

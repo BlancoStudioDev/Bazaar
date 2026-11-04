@@ -7,16 +7,15 @@ import { ExternalLink, PanelRight, X } from "lucide-react";
 import { MARKETPLACES, MARKETPLACE_IDS } from "@/lib/marketplaces";
 import type { SharedProduct } from "@/lib/share/snapshot";
 import { MarketplaceDot } from "@/components/ui";
-import { cn, formatPrice, truncate } from "@/lib/ui";
+import { useT } from "@/lib/i18n/client";
+import { cn, conditionLabel, displayPrice, truncate } from "@/lib/ui";
 
 function SharedProductRow({ product }: { product: SharedProduct }) {
+  const { lang } = useT();
   const [failed, setFailed] = useState(false);
   const meta = MARKETPLACES[product.marketplace];
-  const price =
-    product.price === 0
-      ? "Gratis"
-      : product.priceLabel || formatPrice(product.price) || "n/d";
-  const detail = product.condition || product.location;
+  const price = displayPrice(product, lang);
+  const detail = product.condition ? conditionLabel(product.condition, lang) : product.location;
   return (
     <a
       href={product.url}
@@ -72,6 +71,7 @@ function SharedProductRow({ product }: { product: SharedProduct }) {
 
 /** Bacheca statica: pulsante + pannello a scorrimento con elenco ordinato per prezzo. */
 export function SharedBoard({ products }: { products: SharedProduct[] }) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | string>("all");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -121,11 +121,11 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
         type="button"
         onClick={() => setOpen(true)}
         className="btn-quiet"
-        aria-label={`Bacheca, ${products.length} prodotti`}
+        aria-label={t("app.boardAria", { count: products.length })}
         aria-haspopup="dialog"
       >
         <PanelRight className="h-4 w-4" aria-hidden />
-        <span className="hidden sm:inline">Bacheca</span>
+        <span className="hidden sm:inline">{t("app.board")}</span>
         <span className="font-mono text-[12px] text-muted">
           {products.length}
         </span>
@@ -137,7 +137,7 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
               <button
                 type="button"
                 className="absolute inset-0 cursor-default bg-ink/40 animate-fade-in"
-                aria-label="Chiudi bacheca"
+                aria-label={t("app.closeBoard")}
                 tabIndex={-1}
                 onClick={() => setOpen(false)}
               />
@@ -145,18 +145,19 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
                 <aside
                   role="dialog"
                   aria-modal="true"
-                  aria-label="Bacheca"
+                  aria-label={t("app.board")}
                   className="results-board is-mobile"
                 >
                   <div className="flex items-start justify-between gap-4 border-b border-line px-4 pb-4 pt-4">
                     <div>
                       <h2 className="font-serif text-[28px] leading-none text-ink">
-                        Bacheca
+                        {t("app.board")}
                       </h2>
                       <p className="mt-2 text-[12px] text-muted">
-                        {products.length}{" "}
-                        {products.length === 1 ? "prodotto" : "prodotti"} da{" "}
-                        {sources} {sources === 1 ? "fonte" : "fonti"}
+                        {t("board.summary", {
+                          products: t("board.products", { count: products.length }),
+                          sources: t("board.sources", { count: sources }),
+                        })}
                       </p>
                     </div>
                     <button
@@ -164,7 +165,7 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
                       type="button"
                       onClick={() => setOpen(false)}
                       className="icon-btn"
-                      aria-label="Chiudi bacheca"
+                      aria-label={t("app.closeBoard")}
                     >
                       <X className="h-4 w-4" aria-hidden />
                     </button>
@@ -174,7 +175,7 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
                     <div
                       className="scrollbar-none flex gap-2 overflow-x-auto"
                       role="group"
-                      aria-label="Filtra per fonte"
+                      aria-label={t("board.filterAria")}
                     >
                       <button
                         type="button"
@@ -185,7 +186,7 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
                           filter === "all" && "is-active",
                         )}
                       >
-                        Tutti
+                        {t("board.all")}
                       </button>
                       {MARKETPLACE_IDS.filter((id) => counts.get(id)).map(
                         (id) => (
@@ -209,7 +210,7 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
                       )}
                     </div>
                     <p className="mt-2 text-[12px] text-muted">
-                      Ordinati per prezzo crescente
+                      {t("board.sortedAsc")}
                     </p>
                   </div>
 
@@ -220,8 +221,7 @@ export function SharedBoard({ products }: { products: SharedProduct[] }) {
                   </div>
 
                   <p className="border-t border-line px-4 py-3 text-[12px] leading-relaxed text-muted">
-                    Prezzi al momento della condivisione: possono essere
-                    cambiati. Verifica sull&apos;annuncio.
+                    {t("board.sharedDisclaimer")}
                   </p>
                 </aside>
               </div>

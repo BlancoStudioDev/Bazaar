@@ -15,6 +15,8 @@ import type {
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
 import { apiPath } from "@/lib/base-path";
 import { conversationTitle, uid } from "@/lib/ui";
+import { DEFAULT_LANG, isLangSetting, t, type Lang, type LangSetting } from "@/lib/i18n";
+import { detectBrowserLang, persistLangCookie } from "@/lib/i18n/client";
 import { dropSuspiciousPrices } from "@/lib/mcp/plausibility";
 
 const LEGACY_CONVERSATIONS_KEY = "bazaar.conversations.v1";
@@ -32,6 +34,8 @@ export interface Settings {
   enabledMarketplaces: MarketplaceId[];
   city: string;
   allowPaidFallback: boolean;
+  /** Lingua dell'interfaccia: "auto" = dal browser. Campo aggiunto senza bump di versione (manca = "auto"). */
+  lang: LangSetting;
   settingsVersion: number;
 }
 
@@ -43,6 +47,7 @@ const DEFAULT_SETTINGS: Settings = {
   enabledMarketplaces: [...MARKETPLACE_IDS],
   city: "Milano",
   allowPaidFallback: false,
+  lang: "auto",
   settingsVersion: SETTINGS_VERSION,
 };
 
@@ -71,7 +76,7 @@ function sanitizeConversations(value: unknown): Conversation[] {
     })
     .map((conversation) => ({
       ...conversation,
-      title: conversation.title || "Ricerca",
+      title: conversation.title || "…",
       createdAt: conversation.createdAt || Date.now(),
       updatedAt: conversation.updatedAt || Date.now(),
       messages: conversation.messages.slice(-MAX_MESSAGES).map((message) => ({
@@ -101,6 +106,7 @@ function sanitizeSettings(value: unknown): Settings {
     enabledMarketplaces: enabled.length ? enabled : DEFAULT_SETTINGS.enabledMarketplaces,
     city: typeof raw.city === "string" && raw.city.trim() ? raw.city.trim().slice(0, 60) : "Milano",
     allowPaidFallback: migrated ? false : raw.allowPaidFallback === true,
+    lang: isLangSetting(raw.lang) ? raw.lang : "auto",
     settingsVersion: SETTINGS_VERSION,
   };
 }
@@ -130,8 +136,9 @@ function mergeActivity(
 async function readSse(
   response: Response,
   onEvent: (event: AgentEvent) => void,
+  noStreamMessage: string,
 ): Promise<void> {
-  if (!response.body) throw new Error("Il server non ha aperto uno stream.");
+  if (!response.body) throw new Error(noStreamMessage);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -172,7 +179,7 @@ async function readSse(
   if (buffer.trim()) processBlock(buffer);
 }
 
-export function useBazaar(userId: string) {
+export function useBazaar(userId: string, initialLang: Lang = DEFAULT_LANG) {
   const CONVERSATIONS_KEY = conversationsKey(userId);
   const SETTINGS_KEY = settingsKey(userId);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -189,6 +196,11 @@ export function useBazaar(userId: string) {
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // Lingua effettiva: scelta esplicita, altrimenti browser (dopo l'idratazione) o lingua iniziale dal server.
+  const lang: Lang =
+    settings.lang !== "auto" ? settings.lang : hydrated ? detectBrowserLang(initialLang, false) : initialLang;
+  const langRef = useRef(lang);
+  langRef.current = lang;
   const abortRef = useRef<AbortController | null>(null);
   const statusRequestRef = useRef(false);
   const textBufferRef = useRef("");
@@ -253,6 +265,11 @@ export function useBazaar(userId: string) {
     }
   }, [settings, hydrated]);
 
+  useEffect(() => {
+    if (!hydrated) return;
+    persistLangCookie(settings.lang === "auto" ? null : settings.lang);
+  }, [settings.lang, hydrated]);
+
   const refreshModels = useCallback(async (force = false) => {
     setModelsLoading(true);
     setModelsError(null);
@@ -265,7 +282,7 @@ export function useBazaar(userId: string) {
       setModelRegistry(payload);
       return payload;
     } catch (error) {
-      setModelsError(error instanceof Error ? error.message : "Errore nel caricamento dei modelli.");
+      setModelsError(error instanceof Error ? error.message : t(langRef.current, "err.models"));
       return null;
     } finally {
       setModelsLoading(false);
@@ -285,7 +302,7 @@ export function useBazaar(userId: string) {
       return payload;
     } catch (error) {
       setStatusError(
-        error instanceof Error ? error.message : "Errore nel controllo delle connessioni.",
+        error instanceof Error ? error.message : t(langRef.current, "err.status"),
       );
       return null;
     } finally {
@@ -310,7 +327,7 @@ export function useBazaar(userId: string) {
         return payload;
       } catch (error) {
         setStatusError(
-          error instanceof Error ? error.message : "Errore nella riconnessione.",
+          error instanceof Error ? error.message : t(langRef.current, "err.reconnect"),
         );
         return null;
       } finally {
@@ -495,6 +512,7 @@ export function useBazaar(userId: string) {
             marketplaces: settings.enabledMarketplaces,
             city: settingsRef.current.city.trim() || DEFAULT_SETTINGS.city,
             allowPaidFallback: options.allowPaidFallback ?? settings.allowPaidFallback,
+            lang: langRef.current,
           }),
           signal: controller.signal,
         });
@@ -510,7 +528,7 @@ export function useBazaar(userId: string) {
           throw new Error(detail);
         }
 
-        await readSse(response, handleEvent);
+        await readSse(response, handleEvent, t(langRef.current, "err.noStream"));
         flushText();
         updateAssistant(conversationId, assistantId, (message) =>
           message.status === "streaming" ? { ...message, status: "done" } : message,
@@ -523,7 +541,7 @@ export function useBazaar(userId: string) {
             status: "stopped",
           }));
         } else {
-          const message = error instanceof Error ? error.message : "Errore di rete.";
+          const message = error instanceof Error ? error.message : t(langRef.current, "err.network");
           updateAssistant(conversationId, assistantId, (current) => ({
             ...current,
             status: "error",
@@ -697,7 +715,7 @@ export function useBazaar(userId: string) {
   /** Crea uno snapshot pubblico della chat attiva (o restituisce il link già esistente). */
   const shareConversation = useCallback(async (): Promise<ShareResult> => {
     const conversation = activeConversation;
-    if (!conversation) return { ok: false, error: "Apri una chat prima di condividerla." };
+    if (!conversation) return { ok: false, error: t(langRef.current, "share.openChatFirst") };
     if (conversation.shareToken && conversation.shareUrl) {
       return { ok: true, url: conversation.shareUrl, token: conversation.shareToken };
     }
@@ -735,7 +753,7 @@ export function useBazaar(userId: string) {
       });
       const data = (await response.json().catch(() => ({}))) as { token?: string; url?: string; error?: string };
       if (!response.ok || !data.token || !data.url) {
-        return { ok: false, error: data.error || "Non sono riuscito a creare il link. Riprova." };
+        return { ok: false, error: data.error || t(langRef.current, "share.createError") };
       }
       const { token, url } = data;
       setConversations((prev) =>
@@ -743,7 +761,7 @@ export function useBazaar(userId: string) {
       );
       return { ok: true, url, token };
     } catch {
-      return { ok: false, error: "Non sono riuscito a creare il link. Controlla la connessione e riprova." };
+      return { ok: false, error: t(langRef.current, "share.createNetwork") };
     }
   }, [activeConversation]);
 
@@ -758,7 +776,7 @@ export function useBazaar(userId: string) {
       // 404 = già revocato o inesistente: per l'utente è lo stesso risultato.
       if (!response.ok && response.status !== 404) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
-        return { ok: false, error: data.error || "Non sono riuscito a interrompere la condivisione. Riprova." };
+        return { ok: false, error: data.error || t(langRef.current, "share.stopError") };
       }
       setConversations((prev) =>
         prev.map((item) => {
@@ -771,7 +789,7 @@ export function useBazaar(userId: string) {
       );
       return { ok: true };
     } catch {
-      return { ok: false, error: "Non sono riuscito a interrompere la condivisione. Controlla la connessione e riprova." };
+      return { ok: false, error: t(langRef.current, "share.stopNetwork") };
     }
   }, [activeConversation]);
 
@@ -783,6 +801,7 @@ export function useBazaar(userId: string) {
 
   return {
     hydrated,
+    lang,
     conversations,
     activeConversation,
     activeId,

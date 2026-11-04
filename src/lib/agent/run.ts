@@ -2,12 +2,13 @@ import { explicitCityInText } from "@/lib/agent/city";
 import { enrichWithDescriptions } from "@/lib/agent/enrich";
 import { buildSystemPrompt } from "@/lib/agent/prompt";
 import {
-  REFUSALS,
+  refusalFor,
   buildGuardMessages,
   parseGuardReply,
   ruleCheck,
   type GuardVerdict,
 } from "@/lib/agent/guard";
+import { coerceLang, detectMessageLang, t, type Lang } from "@/lib/i18n";
 import { getMcpManager } from "@/lib/mcp/manager";
 import { toolLabel } from "@/lib/mcp/config";
 import {
@@ -56,6 +57,20 @@ function cleanHistory(messages: ChatRequestBody["messages"]): Array<{ role: "use
     }))
     .filter((message) => message.content.length > 0);
   return cleaned.slice(-MAX_HISTORY_MESSAGES);
+}
+
+const REMINDERS: Record<Lang, string> = {
+  it: "[Rispondi in italiano.]",
+  en: "[Respond in English.]",
+  es: "[Responde en español.]",
+  fr: "[Réponds en français.]",
+  de: "[Antworte auf Deutsch.]",
+};
+
+/** Promemoria di lingua in coda all'ultimo messaggio: se la lingua è riconoscibile la nomina, altrimenti resta generico. */
+function languageReminder(text: string): string {
+  const detected = detectMessageLang(text);
+  return detected ? REMINDERS[detected] : "[Reply in the language of the message above, not of earlier replies.]";
 }
 
 function parseToolArguments(raw: string): Record<string, unknown> {
@@ -168,18 +183,19 @@ function compactTools(tools: OpenRouterTool[]): OpenRouterTool[] {
   }));
 }
 
-function priceTag(model: FreeModel): string {
+function priceTag(model: FreeModel, lang: Lang): string {
+  const paid = t(lang, "srv.paidTag");
   return model.pricePerMillion != null
-    ? ` · a pagamento ~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)}/1M token`
-    : " · a pagamento";
+    ? ` · ${paid} ~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)}/1M token`
+    : ` · ${paid}`;
 }
 
-function shortModelLabel(model: FreeModel): string {
+function shortModelLabel(model: FreeModel, lang: Lang): string {
   const name = model.name
     .replace(/\s*\(free\)\s*/i, "")
     .replace(/^OpenRouter:\s*/i, "")
     .trim();
-  return `${name}${model.isPaid ? priceTag(model) : " · free"}`;
+  return `${name}${model.isPaid ? priceTag(model, lang) : " · free"}`;
 }
 
 const sleep = (ms: number, signal?: AbortSignal) =>
@@ -206,6 +222,7 @@ async function callModelWithFallback(options: {
   maxTokens?: number;
   signal?: AbortSignal;
   emit: (event: AgentEvent) => void;
+  lang: Lang;
 }): Promise<{
   model: FreeModel;
   content: string;
@@ -227,7 +244,7 @@ async function callModelWithFallback(options: {
       options.emit({
         type: "meta",
         model,
-        modelLabel: shortModelLabel(model),
+        modelLabel: shortModelLabel(model, options.lang),
         fallback: Boolean(model.isPaid),
       });
     };
@@ -236,10 +253,16 @@ async function callModelWithFallback(options: {
         options.emit({
           type: "notice",
           message: model.isPaid
-            ? `Nessun modello gratuito utilizzabile. Uso ${model.name} (a pagamento${
-                model.pricePerMillion != null ? `, ~$${model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2)} per 1M token` : ""
-              })…`
-            : `Fiuto cambia strada: il modello precedente non risponde, provo con ${model.name}…`,
+            ? t(options.lang, "srv.paidModel", {
+                model: model.name,
+                price:
+                  model.pricePerMillion != null
+                    ? t(options.lang, "srv.paidPrice", {
+                        price: model.pricePerMillion.toFixed(model.pricePerMillion < 0.1 ? 3 : 2),
+                      })
+                    : "",
+              })
+            : t(options.lang, "srv.switchModel", { model: model.name }),
         });
       }
       let result: Awaited<ReturnType<typeof streamChatCompletion>> | null = null;
@@ -324,6 +347,7 @@ async function checkRequest(options: {
   history: ReturnType<typeof cleanHistory>;
   registry: Awaited<ReturnType<typeof getModelRegistry>>;
   signal?: AbortSignal;
+  lang: Lang;
 }): Promise<GuardVerdict> {
   const last = options.history[options.history.length - 1].content;
   const byRules = ruleCheck(last);
@@ -350,6 +374,7 @@ async function checkRequest(options: {
         signal: options.signal,
         emit: () => {}, // la decisione del filtro non va mostrata all'utente
         maxTokens: 60,
+        lang: options.lang,
       }),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("guard timeout")), 15_000)),
     ]);
@@ -374,9 +399,10 @@ export async function runAgent(options: {
   emit: (event: AgentEvent) => void;
 }): Promise<void> {
   const { body, signal, emit } = options;
+  const lang = coerceLang(body.lang);
   const history = cleanHistory(body.messages || []);
   if (!history.length || history[history.length - 1].role !== "user") {
-    throw new Error("La richiesta non contiene un messaggio utente.");
+    throw new Error(t(lang, "srv.noUser"));
   }
 
   const settingsCity = (body.city || "Milano").trim() || "Milano";
@@ -403,17 +429,17 @@ export async function runAgent(options: {
 
   const { model: initialModel, registry } = await resolveModel(body.model, false);
 
-  const verdict = await checkRequest({ history, registry, signal });
+  const verdict = await checkRequest({ history, registry, signal, lang });
   if (!verdict.ok) {
     console.log(`[bazaar] guardrail: richiesta bloccata (${verdict.category}, ${verdict.source})`);
-    emit({ type: "delta", text: REFUSALS[verdict.category ?? "fuori_tema"] });
-    emit({ type: "done", modelLabel: "Filtro Bazaar" });
+    emit({ type: "delta", text: refusalFor(verdict.category ?? "fuori_tema", lang) });
+    emit({ type: "done", modelLabel: t(lang, "srv.filterLabel") });
     return;
   }
   emit({
     type: "meta",
     model: initialModel,
-    modelLabel: shortModelLabel(initialModel),
+    modelLabel: shortModelLabel(initialModel, lang),
     fallback: Boolean(initialModel.isPaid),
   });
   if (registry.source === "fallback" && registry.note) {
@@ -422,9 +448,7 @@ export async function runAgent(options: {
 
   const tools = compactTools(manager.getOpenAiTools(online) as OpenRouterTool[]);
   if (!tools.length) {
-    throw new Error(
-      "Nessun marketplace è connesso. Apri “Connessioni”, controlla i server MCP e riprova.",
-    );
+    throw new Error(t(lang, "srv.noMarketplace"));
   }
 
   const allowPaidFallback =
@@ -435,9 +459,14 @@ export async function runAgent(options: {
   const messages: OpenRouterMessage[] = [
     {
       role: "system",
-      content: buildSystemPrompt({ online, offline, city }),
+      content: buildSystemPrompt({ online, offline, city, lang }),
     },
-    ...history,
+    // Promemoria in coda all'ultimo messaggio: i modelli piccoli tendono a restare nella lingua delle risposte precedenti.
+    ...history.map((message, index) =>
+      index === history.length - 1
+        ? { ...message, content: `${message.content}\n\n${languageReminder(message.content)}` }
+        : message,
+    ),
   ];
 
   let totalUsage: ChatUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
@@ -459,6 +488,7 @@ export async function runAgent(options: {
       toolChoice: round === 0 ? "required" : "auto",
       signal,
       emit,
+      lang,
     });
     modelUsed = result.model;
     if (result.usage) {
@@ -497,12 +527,12 @@ export async function runAgent(options: {
     }
     if (!toolCalls.length) {
       if (!result.content.trim() && !anyText) {
-        throw new Error("Il modello non ha prodotto una risposta. Riprova con una richiesta più specifica.");
+        throw new Error(t(lang, "srv.noAnswer"));
       }
       emit({
         type: "done",
         usage: totalUsage.totalTokens ? totalUsage : undefined,
-        modelLabel: shortModelLabel(modelUsed),
+        modelLabel: shortModelLabel(modelUsed, lang),
       });
       return;
     }
@@ -527,7 +557,7 @@ export async function runAgent(options: {
         id: call.id,
         server: resolved?.server || "unknown",
         tool: call.function.name,
-        label: toolLabel(resolved?.server || "", call.function.name),
+        label: toolLabel(resolved?.server || "", call.function.name, lang),
         args: parseToolArguments(call.function.arguments),
         status: "running",
         startedAt: Date.now(),
@@ -626,7 +656,7 @@ export async function runAgent(options: {
         const parts = local.map((e) => `${names[e.activity.server]} ${e.activity.count ?? 0}`);
         emit({
           type: "notice",
-          message: `Annunci locali a ${explicitCity}: ${parts.join(" · ")}. Amazon, eBay, AliExpress e Vinted spediscono da altrove.`,
+          message: t(lang, "srv.localAds", { city: explicitCity, parts: parts.join(" · ") }),
         });
       }
     }
@@ -663,7 +693,7 @@ export async function runAgent(options: {
     if (round === MAX_ROUNDS - 1) {
       emit({
         type: "notice",
-        message: "Fiuto ha fatto abbastanza giri per questa risposta: concludo con quello che ho trovato.",
+        message: t(lang, "srv.maxRounds"),
       });
     }
   }
@@ -678,6 +708,7 @@ export async function runAgent(options: {
     tools: [],
     signal,
     emit,
+    lang,
   });
   modelUsed = finalResult.model;
   if (finalResult.usage) {
@@ -688,13 +719,13 @@ export async function runAgent(options: {
     };
   }
   if (!finalResult.content.trim() && !anyText) {
-    throw new Error("Il modello non ha prodotto una risposta. Riprova con una richiesta più specifica.");
+    throw new Error(t(lang, "srv.noAnswer"));
   }
 
   emit({
     type: "done",
     usage: totalUsage.totalTokens ? totalUsage : undefined,
-    modelLabel: shortModelLabel(modelUsed),
+    modelLabel: shortModelLabel(modelUsed, lang),
   });
 }
 

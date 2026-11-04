@@ -1,4 +1,5 @@
-import { TOOL_LABELS } from "@/lib/brand/phrases";
+import { toolLabelFor } from "@/lib/brand/phrases";
+import type { Lang } from "@/lib/i18n";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -101,8 +102,8 @@ export function missingServerFiles(config: McpServerConfig): string | null {
   return null;
 }
 
-export function toolLabel(server: string, tool: string): string {
-  return TOOL_LABELS[tool] || `${server} · ${tool}`;
+export function toolLabel(server: string, tool: string, lang?: Lang): string {
+  return toolLabelFor(tool, lang) || `${server} · ${tool}`;
 }
 
 export function isSearchTool(tool: string): boolean {

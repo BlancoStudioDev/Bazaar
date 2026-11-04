@@ -8,37 +8,34 @@ import { Spinner } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 import { safeCallbackPath } from "@/lib/auth/redirect";
 import { withBasePath } from "@/lib/base-path";
+import type { TKey } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const ERROR_MESSAGES: Record<string, string> = {
-  not_allowed:
-    "Questo account non è autorizzato ad accedere a Bazaar. Prova con un altro account OnionRings o chiedi di essere aggiunto.",
-  access_denied: "Hai negato il consenso su OnionRings. Per entrare serve accettarlo: riprova quando vuoi.",
-  email_not_verified: "L'email del tuo account OnionRings non è verificata. Verificala e riprova.",
-  state_not_found: "La richiesta di accesso è scaduta. Riprova.",
-  state_mismatch: "La richiesta di accesso è scaduta. Riprova.",
-  please_restart_the_process: "La richiesta di accesso è scaduta. Riprova.",
-  invalid_state: "La richiesta di accesso è scaduta. Riprova.",
-  no_code: "La richiesta di accesso non è andata a buon fine. Riprova.",
-  invalid_code: "La richiesta di accesso è scaduta o non è valida. Riprova.",
-  invalid_callback_request: "La richiesta di accesso non è valida. Riprova.",
-  nonce_binding_missing: "La richiesta di accesso è scaduta. Riprova.",
-  unable_to_get_user_info: "OnionRings non ha risposto come previsto. Riprova tra poco.",
-  issuer_mismatch: "OnionRings non ha risposto come previsto. Riprova tra poco.",
-  server_error: "OnionRings non è raggiungibile al momento. Riprova tra poco.",
-  temporarily_unavailable: "OnionRings non è raggiungibile al momento. Riprova tra poco.",
-  internal_server_error: "OnionRings non è raggiungibile al momento. Riprova tra poco.",
-  provider_unavailable: "OnionRings non è raggiungibile al momento. Riprova tra poco.",
+const ERROR_KEYS: Record<string, TKey> = {
+  not_allowed: "login.err.notAllowed",
+  access_denied: "login.err.denied",
+  email_not_verified: "login.err.unverified",
+  state_not_found: "login.err.expired",
+  state_mismatch: "login.err.expired",
+  please_restart_the_process: "login.err.expired",
+  invalid_state: "login.err.expired",
+  nonce_binding_missing: "login.err.expired",
+  no_code: "login.err.failed",
+  invalid_code: "login.err.invalid",
+  invalid_callback_request: "login.err.badRequest",
+  unable_to_get_user_info: "login.err.unexpected",
+  issuer_mismatch: "login.err.unexpected",
+  server_error: "login.err.unavailable",
+  temporarily_unavailable: "login.err.unavailable",
+  internal_server_error: "login.err.unavailable",
+  provider_unavailable: "login.err.unavailable",
 };
 
-function messageFor(code: string | null): string | null {
-  if (!code) return null;
-  return ERROR_MESSAGES[code.toLowerCase()] ?? "Accesso non riuscito. Riprova.";
-}
-
 export function LoginForm({ callbackURL, error }: { callbackURL: string; error: string | null }) {
+  const { t } = useT();
   const [pending, setPending] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const message = localError ?? messageFor(error);
+  const message = localError ?? (error ? t(ERROR_KEYS[error.toLowerCase()] ?? "login.err.default") : null);
 
   const signIn = async () => {
     setPending(true);
@@ -54,12 +51,12 @@ export function LoginForm({ callbackURL, error }: { callbackURL: string; error: 
         ),
       });
       if (result?.error) {
-        setLocalError(ERROR_MESSAGES.provider_unavailable);
+        setLocalError(t("login.err.unavailable"));
         setPending(false);
       }
       // In caso di successo il browser viene reindirizzato a OnionRings.
     } catch {
-      setLocalError(ERROR_MESSAGES.provider_unavailable);
+      setLocalError(t("login.err.unavailable"));
       setPending(false);
     }
   };
@@ -72,10 +69,10 @@ export function LoginForm({ callbackURL, error }: { callbackURL: string; error: 
           <Logo variant="word" tone="dark" size={48} />
         </h1>
         <p className="mt-3 font-serif text-[24px] italic leading-[1.1] tracking-[-0.01em] text-ink-2">
-          Il fiuto giusto per ogni affare.
+          {t("brand.tagline")}
         </p>
         <p className="mt-4 text-[15px] leading-relaxed text-ink-2">
-          Il tuo personal shopper: confronta prezzi reali su più marketplace in un'unica chat.
+          {t("login.sub")}
         </p>
 
         {message ? (
@@ -94,7 +91,7 @@ export function LoginForm({ callbackURL, error }: { callbackURL: string; error: 
           className="mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink text-[14px] font-medium text-paper transition hover:bg-ink-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-70"
         >
           {pending ? <Spinner className="h-4 w-4" /> : null}
-          {pending ? "Reindirizzamento…" : "Accedi con OnionRings"}
+          {pending ? t("login.pending") : t("login.button")}
         </button>
       </div>
     </main>

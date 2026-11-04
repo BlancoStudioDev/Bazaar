@@ -1,3 +1,4 @@
+import { DEFAULT_LANG, t, type Lang } from "@/lib/i18n";
 import type { OpenRouterMessage } from "@/lib/openrouter/client";
 
 /** Lunghezza massima accettata per un singolo messaggio di ricerca. */
@@ -12,24 +13,35 @@ export interface GuardVerdict {
   source: "regole" | "modello" | "non_verificato";
 }
 
-export const REFUSALS: Record<GuardCategory, string> = {
-  fuori_tema:
-    "Qui Fiuto fa una cosa sola, ma la fa bene: annusare affari sui marketplace (Amazon, AliExpress, Vinted, Subito, Facebook Marketplace). Dimmi cosa vorresti comprare, per esempio «una RTX 4070 usata a Milano».",
-  illegale:
-    "Questa bancarella Fiuto non la frequenta. Posso però cercare prodotti in regola: dimmi cosa ti serve.",
-  abuso: "Meglio rimettere il naso sugli affari. Scrivimi che prodotto cerchi e lo confronto per te.",
-  injection:
-    "Le istruzioni del bazar restano nel retrobottega: non le cambio e non le mostro. Posso però cercare un prodotto per te, dimmi cosa ti serve.",
-  troppo_lungo: `Messaggio troppo lungo per il banco (massimo ${MAX_REQUEST_CHARS} caratteri). Descrivi il prodotto che cerchi in poche righe.`,
-};
+/** Rifiuto nella lingua dell'interfaccia, nella voce di Fiuto (testi nel dizionario i18n, chiavi `guard.*`). */
+export function refusalFor(category: GuardCategory, lang: Lang = DEFAULT_LANG): string {
+  return t(lang, `guard.${category}`, { max: MAX_REQUEST_CHARS });
+}
 
 // Tentativi evidenti di manipolare l'assistente: bloccati senza spendere una chiamata al modello.
+// Coprono it, en, es, fr, de (verbo "ignora/dimentica/..." + istruzioni/regole/prompt; richieste di rivelare il prompt).
+// \b non gestisce bene gli accenti: dove serve si usano lookaround Unicode.
+const W = "(?<![\\p{L}])";
+const E = "(?![\\p{L}])";
 const INJECTION_PATTERNS: RegExp[] = [
-  /\b(ignora|ignorare|dimentica|disattiva|annulla)\b.{0,40}\b(istruzioni|regole|prompt|vincoli)\b/i,
-  /\b(ignore|disregard|forget|override)\b.{0,40}\b(instructions|rules|prompt|guidelines)\b/i,
-  /\b(mostra|rivela|stampa|ripeti|scrivi|dimmi)\b.{0,40}\b(system prompt|prompt di sistema|istruzioni di sistema|le tue istruzioni)\b/i,
-  /\b(reveal|show|print|repeat)\b.{0,40}\b(system prompt|your instructions|your prompt)\b/i,
-  /\b(jailbreak|DAN mode|modalit[àa] sviluppatore|developer mode)\b/i,
+  // it
+  new RegExp(`${W}(ignora|ignorare|ignorate|dimentica|dimenticare|disattiva|annulla|scavalca|aggira)${E}.{0,40}${W}(istruzioni|regole|prompt|vincoli|direttive)${E}`, "iu"),
+  new RegExp(`${W}(mostra|rivela|stampa|ripeti|scrivi|dimmi|mostrami)${E}.{0,40}${W}(system prompt|prompt di sistema|istruzioni di sistema|le tue istruzioni|il tuo prompt)${E}`, "iu"),
+  // en
+  new RegExp(`${W}(ignore|disregard|forget|override|bypass)${E}.{0,40}${W}(instructions|rules|prompt|guidelines|directives)${E}`, "iu"),
+  new RegExp(`${W}(reveal|show|print|repeat|display|leak|tell me)${E}.{0,40}${W}(system prompt|your instructions|your prompt)${E}`, "iu"),
+  // es
+  new RegExp(`${W}(ignora|ignore|ignoren|ignorar|olvida|olvidate|olvídate|omite|omitir|desactiva|salta|anula)${E}.{0,40}${W}(instrucciones|reglas|prompt|indicaciones|directrices|restricciones)${E}`, "iu"),
+  new RegExp(`${W}(muestra|muéstrame|muestrame|revela|imprime|repite|escribe|dime|enséñame|ensename)${E}.{0,40}${W}(prompt del sistema|prompt de sistema|instrucciones del sistema|tus instrucciones|tu prompt)${E}`, "iu"),
+  // fr
+  new RegExp(`${W}(ignore|ignorez|ignorer|oublie|oubliez|oublier|désactive|desactive|contourne|outrepasse)${E}.{0,40}${W}(instructions|consignes|règles|regles|prompt|directives|restrictions)${E}`, "iu"),
+  new RegExp(`${W}(montre|montre-moi|montrez|révèle|revele|affiche|affichez|répète|repete|écris|ecris|dis-moi)${E}.{0,40}${W}(prompt système|prompt systeme|prompt de système|instructions système|instructions systeme|tes instructions|tes consignes|ton prompt|vos instructions)${E}`, "iu"),
+  // de
+  new RegExp(`${W}(ignoriere|ignorier|ignorieren|vergiss|vergessen|missachte|umgehe|deaktiviere|überschreibe)${E}.{0,40}${W}(anweisungen|anweisung|regeln|prompt|vorgaben|instruktionen|richtlinien)${E}`, "iu"),
+  new RegExp(`${W}(zeige|zeig|zeigen|verrate|gib|gebe|wiederhole|schreibe|nenne|nenn)${E}.{0,40}${W}(system-prompt|systemprompt|system prompt|deine anweisungen|deinen prompt|systemanweisungen)${E}`, "iu"),
+  // generici
+  /(jailbreak|DAN mode|modalit[àa] sviluppatore|developer mode|modo desarrollador|modo developer|mode développeur|mode developpeur|entwicklermodus|modo dios|god mode)/i,
+  /(<\/?\s*(system|instructions?)\s*>|\[\s*(system|inst)\s*\])/i,
 ];
 
 // eslint-disable-next-line no-control-regex
@@ -47,6 +59,7 @@ export function ruleCheck(text: string): GuardVerdict | null {
 
 const GUARD_SYSTEM = `Sei il filtro di ingresso di Bazaar, un assistente che SOLO cerca e confronta prodotti sui marketplace (Amazon, eBay, AliExpress, Vinted, Subito, Facebook Marketplace).
 Decidi se l'ULTIMO messaggio dell'utente è una richiesta legittima per questo servizio.
+Il messaggio può essere in QUALSIASI lingua (italiano, inglese, spagnolo, francese, tedesco, giapponese...): classificalo per significato, non per lingua. Una richiesta di prodotti in qualunque lingua è legittima; "fuori_tema" riguarda l'argomento, mai la lingua.
 
 CONSENTI (ok=true): cercare, confrontare o filtrare prodotti, prezzi, annunci, venditori, condizioni, spedizione, località; valutare quanto vale un oggetto usato (anche con prezzi di vendita eBay US/UK in USD/GBP); domande di chiarimento o follow-up sul risultato precedente (es. "solo a Milano", "sotto i 50 euro", "quale conviene?", "è compatibile con...?").
 BLOCCA (ok=false):

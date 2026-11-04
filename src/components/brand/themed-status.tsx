@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { seedFrom, statusPhrase } from "@/lib/brand/phrases";
+import { useT } from "@/lib/i18n/client";
 import type { ToolActivity } from "@/lib/types";
 
 /** Millisecondi trascorsi da `since` mentre `active`; aggiorna ogni secondo. */
@@ -25,12 +26,14 @@ export function useStatusPhrase(options: {
   hasText: boolean;
   active: boolean;
 }): string {
+  const { lang } = useT();
   const elapsedMs = useElapsed(options.startedAt, options.active);
   return statusPhrase({
     activities: options.activities,
     hasText: options.hasText,
     elapsedMs,
     seed: seedFrom(options.messageId),
+    lang,
   });
 }
 

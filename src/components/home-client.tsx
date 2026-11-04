@@ -1,6 +1,8 @@
 "use client";
 
 import { AppShell } from "@/components/app-shell";
+import type { Lang } from "@/lib/i18n";
+import { I18nProvider } from "@/lib/i18n/client";
 import { useBazaar } from "@/lib/use-bazaar";
 
 export interface ClientUser {
@@ -10,7 +12,11 @@ export interface ClientUser {
   authEnabled: boolean;
 }
 
-export function HomeClient({ user }: { user: ClientUser }) {
-  const store = useBazaar(user.id);
-  return <AppShell store={store} user={user} />;
+export function HomeClient({ user, initialLang }: { user: ClientUser; initialLang?: Lang }) {
+  const store = useBazaar(user.id, initialLang);
+  return (
+    <I18nProvider lang={store.lang}>
+      <AppShell store={store} user={user} />
+    </I18nProvider>
+  );
 }

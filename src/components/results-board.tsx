@@ -9,6 +9,7 @@ import { ProductCard } from "@/components/product-card";
 import { MarketplaceDot, Spinner } from "@/components/ui";
 import type { BazaarStore } from "@/lib/use-bazaar";
 import type { MarketplaceId, Product } from "@/lib/types";
+import { useT } from "@/lib/i18n/client";
 import { cn } from "@/lib/ui";
 
 type SortMode = "price-asc" | "price-desc" | "source";
@@ -35,6 +36,7 @@ export function ResultsBoard({
   onClose?: () => void;
   mobile?: boolean;
 }) {
+  const { t } = useT();
   const [filter, setFilter] = useState<"all" | MarketplaceId>("all");
   const [sort, setSort] = useState<SortMode>("price-asc");
 
@@ -61,21 +63,24 @@ export function ResultsBoard({
 
   const sources = new Set(products.map((product) => product.marketplace)).size;
   const sortLabel =
-    sort === "price-asc" ? "Prezzo crescente" : sort === "price-desc" ? "Prezzo decrescente" : "Per fonte";
+    sort === "price-asc" ? t("board.sortAsc") : sort === "price-desc" ? t("board.sortDesc") : t("board.sortSource");
 
   return (
-    <aside className={cn("results-board", mobile && "is-mobile")} aria-label="Bacheca">
+    <aside className={cn("results-board", mobile && "is-mobile")} aria-label={t("app.board")}>
       <div className="flex items-start justify-between gap-4 border-b border-line px-4 pb-4 pt-4">
         <div>
-          <h2 className="font-serif text-[28px] leading-none text-ink">Bacheca</h2>
+          <h2 className="font-serif text-[28px] leading-none text-ink">{t("app.board")}</h2>
           <p className="mt-2 text-[12px] text-muted">
             {products.length
-              ? `${products.length} ${products.length === 1 ? "prodotto" : "prodotti"} da ${sources} ${sources === 1 ? "fonte" : "fonti"}`
-              : "Qui trovi i prodotti delle tue ricerche"}
+              ? t("board.summary", {
+                  products: t("board.products", { count: products.length }),
+                  sources: t("board.sources", { count: sources }),
+                })
+              : t("board.emptyHint")}
           </p>
         </div>
         {onClose ? (
-          <button type="button" onClick={onClose} className="icon-btn" aria-label="Chiudi bacheca">
+          <button type="button" onClick={onClose} className="icon-btn" aria-label={t("app.closeBoard")}>
             <X className="h-4 w-4" />
           </button>
         ) : null}
@@ -84,14 +89,14 @@ export function ResultsBoard({
       {products.length ? (
         <>
           <div className="border-b border-line px-4 py-3">
-            <div className="scrollbar-none flex gap-2 overflow-x-auto" role="group" aria-label="Filtra per fonte">
+            <div className="scrollbar-none flex gap-2 overflow-x-auto" role="group" aria-label={t("board.filterAria")}>
               <button
                 type="button"
                 onClick={() => setFilter("all")}
                 aria-pressed={filter === "all"}
                 className={cn("filter-chip", filter === "all" && "is-active")}
               >
-                Tutti
+                {t("board.all")}
               </button>
               {MARKETPLACE_IDS.filter((id) => counts.get(id)).map((id) => (
                 <button
@@ -115,9 +120,9 @@ export function ResultsBoard({
                 )
               }
               className="mt-2 inline-flex min-h-10 items-center text-[12px] text-muted transition hover:text-ink"
-              aria-label={`Ordinamento: ${sortLabel}. Cambia`}
+              aria-label={t("board.sortAria", { sort: sortLabel })}
             >
-              Ordina: <span className="ml-1 text-ink">{sortLabel}</span>
+              {t("board.sortLabel")} <span className="ml-1 text-ink">{sortLabel}</span>
             </button>
           </div>
 
@@ -128,7 +133,7 @@ export function ResultsBoard({
           </div>
 
           <p className="border-t border-line px-4 py-3 text-[12px] leading-relaxed text-muted">
-            Prezzi come indicati dai marketplace. Verifica sempre sull&apos;annuncio.
+            {t("board.disclaimer")}
           </p>
         </>
       ) : (
@@ -136,13 +141,13 @@ export function ResultsBoard({
           {store.isStreaming ? (
             <>
               <Spinner className="h-5 w-5 text-accent" />
-              <p className="mt-4 text-[13px] text-ink">Sto raccogliendo i prodotti…</p>
+              <p className="mt-4 text-[13px] text-ink">{t("board.collecting")}</p>
             </>
           ) : (
             <>
-              <p className="text-[14px] text-ink">Nessun prodotto, per ora</p>
+              <p className="text-[14px] text-ink">{t("board.none")}</p>
               <p className="mt-2 max-w-[240px] text-[13px] leading-relaxed text-muted">
-                Cerca qualcosa in chat: i risultati compaiono qui, ordinati per prezzo.
+                {t("board.noneHint")}
               </p>
             </>
           )}

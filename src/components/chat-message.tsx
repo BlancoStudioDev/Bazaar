@@ -19,14 +19,8 @@ import { ProductStrip } from "@/components/product-card";
 import { Spinner } from "@/components/ui";
 import type { BazaarStore } from "@/lib/use-bazaar";
 import type { ChatMessage as ChatMessageType } from "@/lib/types";
-import { cn, formatTokens, truncate } from "@/lib/ui";
-
-function timeLabel(timestamp: number): string {
-  return new Intl.DateTimeFormat("it-IT", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(timestamp);
-}
+import { useT } from "@/lib/i18n/client";
+import { formatTokens, timeLabel, truncate } from "@/lib/ui";
 
 export function ChatMessage({
   message,
@@ -41,6 +35,7 @@ export function ChatMessage({
   onOpenSettings: () => void;
   isLast: boolean;
 }) {
+  const { t, lang } = useT();
   const [copied, setCopied] = useState(false);
 
   if (message.role === "user") {
@@ -90,8 +85,8 @@ export function ChatMessage({
 
   const metaParts = [
     message.modelLabel ? truncate(message.modelLabel, 38) : null,
-    message.usage?.totalTokens ? formatTokens(message.usage.totalTokens) : null,
-    timeLabel(message.createdAt),
+    message.usage?.totalTokens ? formatTokens(message.usage.totalTokens, lang) : null,
+    timeLabel(message.createdAt, lang),
   ].filter(Boolean);
 
   return (
@@ -101,7 +96,7 @@ export function ChatMessage({
         <span className="text-[13px] font-semibold text-ink">Bazaar</span>
         {message.isFallback ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-            modello di riserva
+            {t("chat.fallbackModel")}
           </span>
         ) : null}
       </div>
@@ -141,9 +136,9 @@ export function ChatMessage({
             <div className="flex items-start gap-2.5 px-4 py-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
               <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-rose-900">La ricerca si è fermata</p>
+                <p className="text-[13px] font-semibold text-rose-900">{t("chat.errorTitle")}</p>
                 <p className="mt-0.5 text-[13px] leading-relaxed text-rose-800">
-                  {message.error || "Errore inatteso."}
+                  {message.error || t("chat.errorUnexpected")}
                 </p>
                 {/data policy|privacy|zdr/i.test(message.error || "") ? (
                   <a
@@ -152,7 +147,7 @@ export function ChatMessage({
                     rel="noreferrer"
                     className="mt-2 inline-flex min-h-10 items-center gap-1 text-[12px] font-medium text-rose-800 underline decoration-rose-300 underline-offset-2 hover:decoration-rose-500"
                   >
-                    Apri le impostazioni privacy di OpenRouter
+                    {t("chat.privacyLink")}
                   </a>
                 ) : null}
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -164,7 +159,7 @@ export function ChatMessage({
                       className="inline-flex min-h-10 items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-paper transition hover:bg-ink/85 disabled:opacity-50"
                     >
                       <Sparkles className="h-4 w-4" />
-                      Riprova con il modello a pagamento
+                      {t("chat.retryPaid")}
                     </button>
                   ) : null}
                   <button
@@ -174,7 +169,7 @@ export function ChatMessage({
                     className="inline-flex min-h-10 items-center gap-2 rounded-full border border-rose-300 bg-white px-4 py-2 text-[13px] font-medium text-rose-800 transition hover:border-rose-400 disabled:opacity-50"
                   >
                     <RotateCcw className="h-4 w-4" />
-                    {showFallbackAction ? "Riprova gratis" : "Riprova"}
+                    {showFallbackAction ? t("chat.retryFree") : t("common.retry")}
                   </button>
                   {message.error?.toLowerCase().includes("marketplace") ? (
                     <button
@@ -183,7 +178,7 @@ export function ChatMessage({
                       className="inline-flex min-h-10 items-center gap-2 rounded-full border border-rose-300 bg-white px-4 py-2 text-[13px] font-medium text-rose-800 transition hover:border-rose-400"
                     >
                       <WifiOff className="h-4 w-4" />
-                      Controlla le connessioni
+                      {t("chat.checkConnections")}
                     </button>
                   ) : null}
                 </div>
@@ -195,14 +190,14 @@ export function ChatMessage({
         {message.status === "stopped" ? (
           <div className="mt-3 flex items-center gap-2 text-[13px] text-muted">
             <Square className="h-4 w-4" />
-            Ricerca interrotta.
+            {t("chat.stopped")}
             <button
               type="button"
               onClick={() => void store.retryLast()}
               disabled={store.isStreaming}
               className="inline-flex min-h-10 items-center font-medium text-accent underline decoration-accent/30 underline-offset-2"
             >
-              Riprova
+              {t("common.retry")}
             </button>
           </div>
         ) : null}
@@ -216,7 +211,7 @@ export function ChatMessage({
               className="inline-flex min-h-10 items-center gap-1 transition hover:text-ink"
             >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copiato" : "Copia"}
+              {copied ? t("common.copied") : t("common.copy")}
             </button>
           </div>
         ) : null}

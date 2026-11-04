@@ -13,6 +13,7 @@ import { SharePopover } from "@/components/share-popover";
 import type { ClientUser } from "@/components/home-client";
 import { Spinner } from "@/components/ui";
 import type { BazaarStore } from "@/lib/use-bazaar";
+import { useT } from "@/lib/i18n/client";
 import { cn } from "@/lib/ui";
 
 function countProducts(store: BazaarStore): number {
@@ -27,6 +28,7 @@ function countProducts(store: BazaarStore): number {
 }
 
 export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUser }) {
+  const { t } = useT();
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [desktopSidebar, setDesktopSidebar] = useState(true);
   const [mobileResults, setMobileResults] = useState(false);
@@ -36,7 +38,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
 
   const productCount = useMemo(() => countProducts(store), [store.activeConversation]);
   const offline = store.status?.mcp.filter((server) => server.status !== "online").length || 0;
-  const title = store.activeConversation?.title || "Nuova ricerca";
+  const title = store.activeConversation?.title || t("app.newSearch");
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -84,7 +86,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
           <button
             type="button"
             className="absolute inset-0 bg-ink/40 animate-fade-in"
-            aria-label="Chiudi menu"
+            aria-label={t("app.closeMenu")}
             onClick={() => setMobileSidebar(false)}
           />
           <div className="relative z-10 h-full w-[302px] max-w-[88vw] animate-slide-right">
@@ -113,7 +115,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
             type="button"
             onClick={() => setMobileSidebar(true)}
             className="icon-btn lg:hidden"
-            aria-label="Apri la cronologia"
+            aria-label={t("app.openHistory")}
           >
             <Menu className="h-4 w-4" />
           </button>
@@ -124,7 +126,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
             type="button"
             onClick={() => setDesktopSidebar((value) => !value)}
             className="icon-btn hidden lg:inline-flex"
-            aria-label={desktopSidebar ? "Nascondi la cronologia" : "Mostra la cronologia"}
+            aria-label={desktopSidebar ? t("app.hideHistory") : t("app.showHistory")}
             aria-expanded={desktopSidebar}
           >
             <Menu className="h-4 w-4" />
@@ -135,7 +137,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
             {store.isStreaming ? (
               <p className="flex items-center gap-1 text-[12px] text-muted">
                 <Spinner className="h-3 w-3 shrink-0 text-accent" />
-                <span className="truncate">Ricerca in corso…</span>
+                <span className="truncate">{t("app.searching")}</span>
               </p>
             ) : null}
           </div>
@@ -145,10 +147,10 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
               type="button"
               onClick={toggleResults}
               className="btn-quiet"
-              aria-label={`Bacheca, ${productCount} prodotti`}
+              aria-label={t("app.boardAria", { count: productCount })}
             >
               <PanelRight className="h-4 w-4" />
-              <span className="hidden sm:inline">Bacheca</span>
+              <span className="hidden sm:inline">{t("app.board")}</span>
               <span className="font-mono text-[12px] text-muted">{productCount}</span>
             </button>
           ) : null}
@@ -159,9 +161,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
             type="button"
             onClick={() => setSettingsOpen(true)}
             className="icon-btn relative"
-            aria-label={
-              offline ? `Impostazioni, ${offline} marketplace offline` : "Impostazioni"
-            }
+            aria-label={offline ? t("app.settingsOffline", { count: offline }) : t("app.settings")}
           >
             <Settings2 className="h-4 w-4" />
             {offline ? (
@@ -176,7 +176,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
               setMobileSidebar(false);
             }}
             className="icon-btn border-ink bg-ink text-paper hover:text-paper lg:hidden"
-            aria-label="Nuova ricerca"
+            aria-label={t("app.newSearch")}
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -205,7 +205,7 @@ export function AppShell({ store, user }: { store: BazaarStore; user?: ClientUse
           <button
             type="button"
             className="absolute inset-0 bg-ink/40 animate-fade-in"
-            aria-label="Chiudi bacheca"
+            aria-label={t("app.closeBoard")}
             onClick={() => setMobileResults(false)}
           />
           <div className="relative z-10 h-full w-[92vw] max-w-[400px] animate-slide-left">

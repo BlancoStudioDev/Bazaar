@@ -10,6 +10,7 @@ import { authClient } from "@/lib/auth/client";
 import { MARKETPLACE_IDS } from "@/lib/marketplaces";
 import { withBasePath } from "@/lib/base-path";
 import type { BazaarStore } from "@/lib/use-bazaar";
+import { useT } from "@/lib/i18n/client";
 import { cn, groupConversations, relativeTime } from "@/lib/ui";
 
 export function Sidebar({
@@ -29,6 +30,7 @@ export function Sidebar({
   onSelect?: () => void;
   mobile?: boolean;
 }) {
+  const { t, lang } = useT();
   const [signingOut, setSigningOut] = useState(false);
   const signOut = async () => {
     setSigningOut(true);
@@ -38,7 +40,7 @@ export function Sidebar({
       window.location.assign(withBasePath("/login"));
     }
   };
-  const groups = groupConversations(store.conversations);
+  const groups = groupConversations(store.conversations, lang);
   const online = store.status?.mcp.filter((server) => server.status === "online").length ?? 0;
   const total = store.status?.mcp.length || MARKETPLACE_IDS.length;
   const allOnline = Boolean(store.status) && online === total;
@@ -52,7 +54,7 @@ export function Sidebar({
             type="button"
             onClick={onClose}
             className="flex h-10 w-10 items-center justify-center rounded-full text-sidebar-ink/70 transition hover:bg-white/10 hover:text-sidebar-ink"
-            aria-label="Chiudi menu"
+            aria-label={t("app.closeMenu")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -62,12 +64,12 @@ export function Sidebar({
       <div className="px-4">
         <button type="button" onClick={onNew} className="new-search-button">
           <Plus className="h-4 w-4" />
-          <span className="flex-1 text-left text-[13px] font-medium">Nuova ricerca</span>
+          <span className="flex-1 text-left text-[13px] font-medium">{t("app.newSearch")}</span>
           <span className="hidden font-mono text-[11px] text-ink/40 lg:inline">⌘N</span>
         </button>
       </div>
 
-      <nav aria-label="Cronologia" className="scrollbar-dark mt-4 flex-1 overflow-y-auto px-2">
+      <nav aria-label={t("sidebar.history")} className="scrollbar-dark mt-4 flex-1 overflow-y-auto px-2">
         {groups.length ? (
           groups.map((group) => (
             <div key={group.label} className="mb-4">
@@ -100,13 +102,13 @@ export function Sidebar({
                           {conversation.title}
                         </span>
                         <span className="mt-1 block font-mono text-[11px] text-sidebar-ink/45">
-                          {relativeTime(conversation.updatedAt)}
+                          {relativeTime(conversation.updatedAt, lang)}
                         </span>
                       </button>
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`Eliminare «${conversation.title}»?`)) {
+                          if (window.confirm(t("sidebar.deleteConfirm", { title: conversation.title }))) {
                             store.deleteConversation(conversation.id);
                           }
                         }}
@@ -114,7 +116,7 @@ export function Sidebar({
                           "mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sidebar-ink/50 transition hover:bg-white/10 hover:text-sidebar-ink focus-visible:opacity-100",
                           mobile ? "" : "opacity-0 group-hover/item:opacity-100",
                         )}
-                        aria-label={`Elimina «${conversation.title}»`}
+                        aria-label={t("sidebar.delete", { title: conversation.title })}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -126,7 +128,7 @@ export function Sidebar({
           ))
         ) : (
           <p className="px-3 py-4 text-[13px] leading-relaxed text-sidebar-ink/55">
-            Le ricerche che fai compariranno qui.
+            {t("sidebar.empty")}
           </p>
         )}
       </nav>
@@ -134,7 +136,7 @@ export function Sidebar({
       <div className="border-t border-white/[0.08] p-2">
         <button type="button" onClick={onOpenSettings} className="sidebar-card">
           <Settings2 className="h-4 w-4 shrink-0 text-sidebar-ink/70" />
-          <span className="min-w-0 flex-1 text-[13px] text-sidebar-ink">Impostazioni</span>
+          <span className="min-w-0 flex-1 text-[13px] text-sidebar-ink">{t("app.settings")}</span>
           <span
             className={cn(
               "inline-flex items-center gap-2 font-mono text-[11px]",
@@ -163,7 +165,7 @@ export function Sidebar({
               className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12px] text-sidebar-ink/60 transition hover:bg-white/10 hover:text-sidebar-ink disabled:opacity-60"
             >
               <LogOut className="h-4 w-4" aria-hidden />
-              Esci
+              {t("sidebar.signOut")}
             </button>
           </div>
         ) : null}

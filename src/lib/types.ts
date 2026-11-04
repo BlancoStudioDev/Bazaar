@@ -153,6 +153,8 @@ export interface ChatRequestBody {
   marketplaces?: MarketplaceId[];
   city?: string;
   allowPaidFallback?: boolean;
+  /** Lingua dell'interfaccia (it, en, es, fr, de): rifiuti e notice del server. La chat risponde nella lingua dell'utente. */
+  lang?: string;
 }
 
 export type AgentEvent =

@@ -1,5 +1,6 @@
 import type { Conversation, MarketplaceId } from "@/lib/types";
 import { MARKETPLACES } from "@/lib/marketplaces";
+import { DEFAULT_LANG, LOCALES, t, type Lang } from "@/lib/i18n";
 
 export function cn(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
@@ -19,23 +20,23 @@ export function truncate(value: string, length: number): string {
 }
 
 export function conversationTitle(text: string): string {
-  return truncate(text, 46) || "Nuova ricerca";
+  return truncate(text, 46) || "…";
 }
 
-export function relativeTime(timestamp: number): string {
+export function relativeTime(timestamp: number, lang: Lang = DEFAULT_LANG): string {
+  const rtf = new Intl.RelativeTimeFormat(LOCALES[lang], { numeric: "auto", style: "short" });
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "adesso";
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1) return rtf.format(0, "second");
+  if (minutes < 60) return rtf.format(-minutes, "minute");
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} h`;
+  if (hours < 24) return rtf.format(-hours, "hour");
   const days = Math.floor(hours / 24);
-  if (days === 1) return "ieri";
-  if (days < 7) return `${days} g`;
-  return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short" }).format(timestamp);
+  if (days < 7) return rtf.format(-days, "day");
+  return new Intl.DateTimeFormat(LOCALES[lang], { day: "2-digit", month: "short" }).format(timestamp);
 }
 
-export function dayLabel(timestamp: number): string {
+export function dayLabel(timestamp: number, lang: Lang = DEFAULT_LANG): string {
   const date = new Date(timestamp);
   const today = new Date();
   const yesterday = new Date();
@@ -44,18 +45,30 @@ export function dayLabel(timestamp: number): string {
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate();
-  if (sameDay(date, today)) return "Oggi";
-  if (sameDay(date, yesterday)) return "Ieri";
-  return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "long" }).format(date);
+  if (sameDay(date, today)) return t(lang, "time.today");
+  if (sameDay(date, yesterday)) return t(lang, "time.yesterday");
+  return new Intl.DateTimeFormat(LOCALES[lang], { day: "2-digit", month: "long" }).format(date);
 }
 
-export function groupConversations(conversations: Conversation[]): Array<{
+/** Ora del messaggio (HH:mm secondo la lingua). */
+export function timeLabel(timestamp: number, lang: Lang = DEFAULT_LANG): string {
+  return new Intl.DateTimeFormat(LOCALES[lang], { hour: "2-digit", minute: "2-digit" }).format(timestamp);
+}
+
+export function formatDate(timestamp: number, lang: Lang = DEFAULT_LANG): string {
+  return new Intl.DateTimeFormat(LOCALES[lang], { day: "numeric", month: "long", year: "numeric" }).format(timestamp);
+}
+
+export function groupConversations(
+  conversations: Conversation[],
+  lang: Lang = DEFAULT_LANG,
+): Array<{
   label: string;
   items: Conversation[];
 }> {
   const groups = new Map<string, Conversation[]>();
   for (const conversation of conversations) {
-    const label = dayLabel(conversation.updatedAt);
+    const label = dayLabel(conversation.updatedAt, lang);
     const list = groups.get(label) || [];
     list.push(conversation);
     groups.set(label, list);
@@ -66,9 +79,9 @@ export function groupConversations(conversations: Conversation[]): Array<{
   }));
 }
 
-export function formatPrice(value: number | null | undefined): string | null {
+export function formatPrice(value: number | null | undefined, lang: Lang = DEFAULT_LANG): string | null {
   if (value == null || !Number.isFinite(value)) return null;
-  return new Intl.NumberFormat("it-IT", {
+  return new Intl.NumberFormat(LOCALES[lang], {
     style: "currency",
     currency: "EUR",
     minimumFractionDigits: value % 1 === 0 ? 0 : 2,
@@ -76,16 +89,46 @@ export function formatPrice(value: number | null | undefined): string | null {
   }).format(value);
 }
 
-export function formatDuration(ms: number | undefined): string {
-  if (ms == null) return "";
-  if (ms < 1000) return `${Math.max(1, Math.round(ms))} ms`;
-  return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+/** Prezzo da mostrare: formattato nella lingua se in euro, altrimenti l'etichetta originale ($/£ di eBay). */
+export function displayPrice(
+  product: { price: number | null; priceLabel: string | null },
+  lang: Lang = DEFAULT_LANG,
+): string {
+  if (product.price === 0) return t(lang, "common.free");
+  const foreign = product.priceLabel && /[$£]/.test(product.priceLabel);
+  if (!foreign && product.price != null && product.price > 0) {
+    return formatPrice(product.price, lang) || product.priceLabel || t(lang, "common.na");
+  }
+  return product.priceLabel || formatPrice(product.price, lang) || t(lang, "common.na");
 }
 
-export function formatTokens(tokens: number | undefined): string {
+/** Condizione tradotta (Usato/Nuovo/Ricondizionato dai server MCP); altri testi restano com'erano. */
+export function conditionLabel(condition: string, lang: Lang = DEFAULT_LANG): string {
+  const text = condition.trim();
+  const key = /^(ricondizionat\w*|refurbished|renewed)\b/i.test(text)
+    ? "cond.refurbished"
+    : /^(usat\w*|used|seconda mano)\b/i.test(text)
+      ? "cond.used"
+      : /^(nuov\w*|new)\b/i.test(text)
+        ? "cond.new"
+        : null;
+  if (!key) return text;
+  const rest = text.replace(/^\S+(\s+mano)?/i, "");
+  return `${t(lang, key)}${rest}`;
+}
+
+export function formatDuration(ms: number | undefined, lang: Lang = DEFAULT_LANG): string {
+  if (ms == null) return "";
+  if (ms < 1000) return `${Math.max(1, Math.round(ms))} ms`;
+  const seconds = new Intl.NumberFormat(LOCALES[lang], { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(ms / 1000);
+  return `${seconds} s`;
+}
+
+export function formatTokens(tokens: number | undefined, lang: Lang = DEFAULT_LANG): string {
   if (!tokens) return "";
   if (tokens < 1000) return `${tokens} token`;
-  return `${(tokens / 1000).toFixed(1).replace(".", ",")}k token`;
+  const k = new Intl.NumberFormat(LOCALES[lang], { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(tokens / 1000);
+  return `${k}k token`;
 }
 
 export function marketplaceName(id: MarketplaceId | string): string {
@@ -97,11 +140,11 @@ export function marketplaceColor(id: MarketplaceId | string): string {
 }
 
 export function modelShortName(name: string | undefined): string {
-  if (!name) return "Modello";
+  if (!name) return "Model";
   return name
     .replace(/\s*\(free\)\s*/i, "")
     .replace(/^OpenRouter:\s*/i, "")
-    .replace(/\s*·\s*riserva/i, "")
+    .replace(/\s*·\s*(riserva|backup)/i, "")
     .trim();
 }
 

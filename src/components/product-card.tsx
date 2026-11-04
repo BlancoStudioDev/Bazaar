@@ -5,7 +5,8 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 
 import { MARKETPLACES, productHref } from "@/lib/marketplaces";
 import type { Product } from "@/lib/types";
-import { cn, formatPrice, truncate } from "@/lib/ui";
+import { useT } from "@/lib/i18n/client";
+import { cn, conditionLabel, displayPrice, truncate } from "@/lib/ui";
 
 function ProductImage({
   product,
@@ -48,12 +49,10 @@ function ProductImage({
 }
 
 export function ProductCard({ product }: { product: Product }) {
-  const price =
-    product.price === 0
-      ? "Gratis"
-      : product.priceLabel || formatPrice(product.price) || "n/d";
+  const { lang } = useT();
+  const price = displayPrice(product, lang);
   const meta = MARKETPLACES[product.marketplace];
-  const detail = product.condition || product.location;
+  const detail = product.condition ? conditionLabel(product.condition, lang) : product.location;
 
   return (
     <a
@@ -102,6 +101,7 @@ export function ProductStrip({
   products: Product[];
   onOpenResults?: () => void;
 }) {
+  const { t } = useT();
   if (!products.length || !onOpenResults) return null;
   return (
     <button
@@ -109,7 +109,7 @@ export function ProductStrip({
       onClick={onOpenResults}
       className="btn-quiet mt-4"
     >
-      Apri la bacheca · {products.length} {products.length === 1 ? "prodotto" : "prodotti"}
+      {t("board.open", { products: t("board.products", { count: products.length }) })}
       <ArrowRight className="h-4 w-4" aria-hidden />
     </button>
   );

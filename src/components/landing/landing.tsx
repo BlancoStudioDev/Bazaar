@@ -2,7 +2,10 @@ import Link from "next/link";
 
 import { Logo } from "@/components/brand/logo";
 import { Mascot, MascotBadge } from "@/components/brand/mascot";
+import { LangSwitcher } from "@/components/landing/lang-switcher";
 import { BASE_PATH } from "@/lib/base-path";
+import { I18nProvider } from "@/lib/i18n/client";
+import { t as translate, type Lang } from "@/lib/i18n";
 
 /**
  * Landing pubblica di Bazaar. Server component, nessun JS client: solo HTML, SVG inline e CSS (`lp-*`
@@ -17,61 +20,14 @@ const MARKETPLACES = [
 ];
 
 const DEMO_ROWS = [
-  { where: "Subito.it", what: "Usato, 8 mesi · Torino, ritiro a mano", price: "48 €" },
-  { where: "AliExpress", what: "Nuovo · arriva in circa 3 settimane", price: "44 €" },
-  { where: "Vinted", what: "Usato, senza scatola", price: "52 €" },
-  { where: "Amazon.it", what: "Nuovo · spedito da Amazon", price: "59 €" },
-];
+  { where: "Subito.it", what: "lp.row1", price: "48 €" },
+  { where: "AliExpress", what: "lp.row2", price: "44 €" },
+  { where: "Vinted", what: "lp.row3", price: "52 €" },
+  { where: "Amazon.it", what: "lp.row4", price: "59 €" },
+] as const;
 
-const DIFFERENCES = [
-  {
-    title: "Quattro bancarelle, una domanda",
-    body: "Amazon, AliExpress, Vinted e Subito.it in un colpo solo. Niente venti schede aperte una accanto all'altra.",
-  },
-  {
-    title: "Legge le descrizioni, non solo i titoli",
-    body: "Il titolo dice «SSD 1 TB», la descrizione dice «solo la custodia». Fiuto le legge tutte e due.",
-  },
-  {
-    title: "Scarta le trappole",
-    body: "Prezzi-civetta, scatole vuote e kit con tre pezzi quando cercavi un modulo singolo restano fuori dal verdetto.",
-  },
-  {
-    title: "Cerca nella tua città",
-    body: "Per l'usato e il ritiro a mano filtra gli annunci vicino a te, così il prezzo giusto è anche a portata di strada.",
-  },
-  {
-    title: "Chat da condividere con un link",
-    body: "Una ricerca utile vale la pena mandarla a qualcuno. Chi la riceve la legge subito, senza login. Decidi tu se condividerla.",
-  },
-];
-
-const FAQ = [
-  {
-    q: "Costa qualcosa?",
-    a: "Oggi è gratuito, in fase di prova. Bazaar usa modelli AI gratuiti: quando c'è coda può essere più lento e ci sono dei limiti d'uso.",
-  },
-  {
-    q: "Vendete dei prodotti?",
-    a: "No. Bazaar cerca e confronta, non vende e non gestisce pagamenti. I link ti portano all'annuncio sul marketplace, dove compri o ritiri come sempre.",
-  },
-  {
-    q: "Dove vanno i miei dati?",
-    a: "Le tue conversazioni restano nel browser, su questo dispositivo. Una chat diventa pubblica solo se scegli di condividerla: in quel caso se ne salva un'istantanea, leggibile da chi ha il link. Per cercare, il testo della richiesta passa dai servizi AI e dai marketplace interrogati.",
-  },
-  {
-    q: "I prezzi sono aggiornati?",
-    a: "Fiuto li legge nel momento in cui cerchi. Poi possono cambiare: prima di muoverti apri l'annuncio e conferma prezzo e disponibilità.",
-  },
-  {
-    q: "Perché serve un account?",
-    a: "Per tenere dei limiti d'uso equi per tutti e per far funzionare la condivisione delle chat. Si entra con il tuo account OnionRings, senza carta.",
-  },
-  {
-    q: "E Facebook Marketplace?",
-    a: "Non ancora. Per ora Fiuto cerca su Amazon, AliExpress, Vinted e Subito.it.",
-  },
-];
+const DIFFERENCES = ["lp.d1", "lp.d2", "lp.d3", "lp.d4", "lp.d5"] as const;
+const FAQ = ["lp.f1", "lp.f2", "lp.f3", "lp.f4", "lp.f5", "lp.f6"] as const;
 
 function Cta({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -84,17 +40,16 @@ function Cta({ children, className = "" }: { children: React.ReactNode; classNam
   );
 }
 
-function jsonLd() {
+function jsonLd(lang: Lang) {
   const origin = (process.env.BETTER_AUTH_URL ?? "").trim().replace(/\/+$/, "");
   const data: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
     name: "Bazaar",
-    description:
-      "Una chat che cerca su Amazon, AliExpress, Vinted e Subito.it, legge le descrizioni degli annunci e confronta i prezzi. Non vende prodotti.",
+    description: translate(lang, "lp.ldDescription"),
     applicationCategory: "ShoppingApplication",
     operatingSystem: "Web",
-    inLanguage: "it",
+    inLanguage: lang,
     offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
     creator: { "@type": "Organization", name: "BlancoStudio" },
   };
@@ -102,22 +57,27 @@ function jsonLd() {
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
-export function Landing() {
+export function Landing({ lang }: { lang: Lang }) {
+  const t = (key: Parameters<typeof translate>[1], vars?: Parameters<typeof translate>[2]) => translate(lang, key, vars);
   return (
+    <I18nProvider lang={lang}>
     <div className="lp">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd() }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(lang) }} />
       <a href="#lp-main" className="lp-skip">
-        Vai al contenuto
+        {t("lp.skip")}
       </a>
       <div className="lp-awning" aria-hidden />
 
       <header className="lp-nav lp-wrap">
-        <Link href="/" className="lp-nav-logo" aria-label="Bazaar, pagina iniziale">
+        <Link href="/" className="lp-nav-logo" aria-label={t("lp.homeAria")}>
           <Logo tone="dark" size={28} />
         </Link>
-        <Link href="/login" className="lp-nav-link">
-          Accedi
-        </Link>
+        <div className="lp-nav-end">
+          <LangSwitcher lang={lang} label={t("lp.langLabel")} />
+          <Link href="/login" className="lp-nav-link">
+            {t("lp.signIn")}
+          </Link>
+        </div>
       </header>
 
       <main id="lp-main">
@@ -125,53 +85,53 @@ export function Landing() {
         <section className="lp-hero lp-wrap" aria-labelledby="lp-h1">
           <div className="lp-hero-copy">
             <p className="lp-tagline lp-rise" style={{ "--d": "0ms" } as React.CSSProperties}>
-              Il fiuto giusto per ogni affare.
+              {t("brand.tagline")}
             </p>
             <h1 id="lp-h1" className="lp-h1 lp-rise" style={{ "--d": "60ms" } as React.CSSProperties}>
-              Basta venti schede aperte. <em>Chiedilo a Fiuto.</em>
+              {t("lp.h1a")} <em>{t("lp.h1b")}</em>
             </h1>
             <p className="lp-lead lp-rise" style={{ "--d": "120ms" } as React.CSSProperties}>
-              Una chat sola fa il giro di Amazon, AliExpress, Vinted e Subito.it e ti dice dove conviene davvero.
+              {t("lp.lead")}
             </p>
             <div className="lp-rise" style={{ "--d": "180ms" } as React.CSSProperties}>
-              <Cta>Accedi con OnionRings</Cta>
-              <p className="lp-trust">Accesso con il tuo account OnionRings · nessuna carta richiesta</p>
+              <Cta>{t("lp.cta")}</Cta>
+              <p className="lp-trust">{t("lp.trust")}</p>
             </div>
           </div>
           <div className="lp-hero-fox lp-rise" style={{ "--d": "100ms" } as React.CSSProperties}>
-            <Mascot mood="idle" size={460} animated title="Fiuto, la volpe del deserto, dietro la sua bancarella" />
+            <Mascot mood="idle" size={460} animated title={t("lp.foxTitle")} />
           </div>
         </section>
 
         {/* 2. Come funziona */}
         <section className="lp-section lp-wrap" aria-labelledby="lp-how">
           <h2 id="lp-how" className="lp-h2">
-            Come funziona
+            {t("lp.howTitle")}
           </h2>
           <ol className="lp-steps">
             <li className="lp-step">
               <div className="lp-step-visual lp-step-query">
-                <p>Cerco un SSD NVMe da 1 TB, anche usato. Sono a Torino.</p>
+                <p>{t("lp.step1.query")}</p>
               </div>
               <p className="lp-step-n">01</p>
-              <h3 className="lp-h3">Scrivi cosa cerchi</h3>
-              <p className="lp-body">Con le tue parole, come lo diresti a un amico. Budget, città e dettagli compresi.</p>
+              <h3 className="lp-h3">{t("lp.step1.title")}</h3>
+              <p className="lp-body">{t("lp.step1.body")}</p>
             </li>
             <li className="lp-step">
               <div className="lp-step-visual">
                 <Mascot mood="sniff" size={150} animated />
               </div>
               <p className="lp-step-n">02</p>
-              <h3 className="lp-h3">Fiuto fa il giro delle bancarelle</h3>
-              <p className="lp-body">Interroga i marketplace in parallelo e legge gli annunci, non solo i titoli.</p>
+              <h3 className="lp-h3">{t("lp.step2.title")}</h3>
+              <p className="lp-body">{t("lp.step2.body")}</p>
             </li>
             <li className="lp-step">
               <div className="lp-step-visual">
                 <Mascot mood="happy" size={150} animated />
               </div>
               <p className="lp-step-n">03</p>
-              <h3 className="lp-h3">Ricevi il verdetto</h3>
-              <p className="lp-body">Prezzi in fila, il consiglio in chiaro e i link diretti agli annunci.</p>
+              <h3 className="lp-h3">{t("lp.step3.title")}</h3>
+              <p className="lp-body">{t("lp.step3.body")}</p>
             </li>
           </ol>
         </section>
@@ -181,37 +141,34 @@ export function Landing() {
           <div className="lp-wrap lp-demo">
             <div className="lp-demo-copy">
               <h2 id="lp-demo" className="lp-h2">
-                Un verdetto, <em>non un elenco</em>
+                {t("lp.demoTitle1")} <em>{t("lp.demoTitle2")}</em>
               </h2>
               <p className="lp-body">
-                Fiuto non ti rovescia addosso cento risultati. Ti dice cosa ha scartato, cosa vale e dove, con onestà anche quando
-                il prezzo più basso non è la scelta migliore.
+                {t("lp.demoBody")}
               </p>
             </div>
 
-            <figure className="lp-chat" aria-label="Esempio di conversazione con Fiuto">
+            <figure className="lp-chat" aria-label={t("lp.chatAria")}>
               <figcaption className="lp-chat-head">
-                <span className="lp-tag">Esempio</span>
-                <span className="lp-chat-note">Prodotti e prezzi di fantasia, per mostrare come ragiona Fiuto.</span>
+                <span className="lp-tag">{t("lp.chatTag")}</span>
+                <span className="lp-chat-note">{t("lp.chatNote")}</span>
               </figcaption>
 
-              <div className="lp-msg-user">Cerco un SSD NVMe da 1 TB, solo il modulo. Se è usato, a Torino.</div>
+              <div className="lp-msg-user">{t("lp.chatUser")}</div>
 
               <div className="lp-msg-fiuto">
                 <MascotBadge size={32} />
                 <div className="lp-msg-body">
-                  <p>
-                    Ho scartato 6 kit con più moduli e 2 annunci «solo scatola». Questi valgono la pena:
-                  </p>
+                  <p>{t("lp.chatIntro")}</p>
                   <div className="lp-table-wrap">
                     <table className="lp-table">
-                      <caption className="lp-sr">Confronto prezzi d&apos;esempio</caption>
+                      <caption className="lp-sr">{t("lp.tableCaption")}</caption>
                       <thead>
                         <tr>
-                          <th scope="col">Dove</th>
-                          <th scope="col">Annuncio</th>
+                          <th scope="col">{t("lp.thWhere")}</th>
+                          <th scope="col">{t("lp.thListing")}</th>
                           <th scope="col" className="lp-num">
-                            Prezzo
+                            {t("lp.thPrice")}
                           </th>
                         </tr>
                       </thead>
@@ -219,7 +176,7 @@ export function Landing() {
                         {DEMO_ROWS.map((row) => (
                           <tr key={row.where}>
                             <th scope="row">{row.where}</th>
-                            <td>{row.what}</td>
+                            <td>{t(row.what)}</td>
                             <td className="lp-num">{row.price}</td>
                           </tr>
                         ))}
@@ -227,10 +184,9 @@ export function Landing() {
                     </table>
                   </div>
                   <p>
-                    <strong>Il mio consiglio:</strong> quello di Subito.it. AliExpress costa meno, ma tre settimane e nessuna garanzia
-                    europea non valgono 4 €. Ritiri a mano e lo provi prima di pagare.
+                    <strong>{t("lp.advice")}</strong> {t("lp.adviceBody")}
                   </p>
-                  <p className="lp-run">Fiuto ha girato 4 bancarelle · 27 annunci</p>
+                  <p className="lp-run">{t("lp.run")}</p>
                 </div>
               </div>
             </figure>
@@ -240,22 +196,22 @@ export function Landing() {
         {/* 4. Cosa fa di diverso */}
         <section className="lp-section lp-wrap lp-diff" aria-labelledby="lp-diff">
           <h2 id="lp-diff" className="lp-h2">
-            Cosa fa <em>di diverso</em>
+            {t("lp.diffTitle1")} <em>{t("lp.diffTitle2")}</em>
           </h2>
           <ul className="lp-diff-list">
             {DIFFERENCES.map((item) => (
-              <li key={item.title}>
-                <h3 className="lp-h3">{item.title}</h3>
-                <p className="lp-body">{item.body}</p>
+              <li key={item}>
+                <h3 className="lp-h3">{t(`${item}.title`)}</h3>
+                <p className="lp-body">{t(`${item}.body`)}</p>
               </li>
             ))}
           </ul>
         </section>
 
         {/* 5. Marketplace */}
-        <section className="lp-markets" aria-label="Marketplace consultati">
+        <section className="lp-markets" aria-label={t("lp.marketsAria")}>
           <div className="lp-wrap">
-            <p className="lp-markets-label">Le bancarelle che Fiuto visita</p>
+            <p className="lp-markets-label">{t("lp.marketsLabel")}</p>
             <ul className="lp-markets-list">
               {MARKETPLACES.map((m) => (
                 <li key={m.name} className={m.cls}>
@@ -263,20 +219,20 @@ export function Landing() {
                 </li>
               ))}
             </ul>
-            <p className="lp-fine">Marchi dei rispettivi proprietari, citati solo per indicare dove cerca Fiuto.</p>
+            <p className="lp-fine">{t("lp.marketsFine")}</p>
           </div>
         </section>
 
         {/* 6. FAQ */}
         <section className="lp-section lp-wrap lp-faq" aria-labelledby="lp-faq">
           <h2 id="lp-faq" className="lp-h2">
-            Domande, <em>risposte oneste</em>
+            {t("lp.faqTitle1")} <em>{t("lp.faqTitle2")}</em>
           </h2>
           <div className="lp-faq-list">
             {FAQ.map((item) => (
-              <details key={item.q} className="lp-details">
-                <summary>{item.q}</summary>
-                <p>{item.a}</p>
+              <details key={item} className="lp-details">
+                <summary>{t(`${item}.q`)}</summary>
+                <p>{t(`${item}.a`)}</p>
               </details>
             ))}
           </div>
@@ -290,10 +246,10 @@ export function Landing() {
             </div>
             <div className="lp-final-copy">
               <h2 id="lp-final" className="lp-h2">
-                Il banco è aperto.
+                {t("lp.finalTitle")}
               </h2>
-              <p className="lp-lead">Dimmi cosa cerchi. Al resto pensa Fiuto.</p>
-              <Cta>Accedi con OnionRings</Cta>
+              <p className="lp-lead">{t("lp.finalLead")}</p>
+              <Cta>{t("lp.cta")}</Cta>
             </div>
           </div>
         </section>
@@ -301,11 +257,12 @@ export function Landing() {
 
       <footer className="lp-footer lp-wrap">
         <Logo tone="dark" size={24} />
-        <p>Bazaar by BlancoStudio</p>
+        <p>{t("lp.footerBy")}</p>
         <Link href="/login" className="lp-nav-link">
-          Accedi
+          {t("lp.signIn")}
         </Link>
       </footer>
     </div>
+    </I18nProvider>
   );
 }
