@@ -243,7 +243,7 @@ export const it = {
   "srv.paidPrice": ", ~${price} per 1M token",
   "srv.paidTag": "a pagamento",
   "srv.localAds":
-    "Annunci locali a {city}: {parts}. Amazon, eBay, AliExpress, Vinted e i negozi online spediscono da altrove.",
+    "Annunci locali a {city}: {parts}. Amazon, eBay, AliExpress e i negozi online spediscono da altrove; Vinted non indica la città del venditore, quindi non posso dire se è a {city}.",
   "srv.maxRounds": "Fiuto ha fatto abbastanza giri per questa risposta: concludo con quello che ho trovato.",
   "srv.filterLabel": "Filtro Bazaar",
   "guard.fuori_tema":

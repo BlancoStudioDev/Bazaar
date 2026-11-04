@@ -230,7 +230,7 @@ export const de: Dict = {
   "srv.paidPrice": ", ~${price} pro 1 Mio. Tokens",
   "srv.paidTag": "kostenpflichtig",
   "srv.localAds":
-    "Lokale Anzeigen in {city}: {parts}. Amazon, eBay, AliExpress, Vinted und die Online-Shops versenden von anderswo.",
+    "Lokale Anzeigen in {city}: {parts}. Amazon, eBay, AliExpress und die Online-Shops versenden von anderswo; Vinted zeigt die Stadt des Verkäufers nicht an, daher kann ich nicht sagen, ob er in {city} ist.",
   "srv.maxRounds": "Fiuto hat für diese Antwort genug Runden gedreht: Ich schließe mit dem ab, was ich gefunden habe.",
   "srv.filterLabel": "Bazaar-Filter",
   "guard.fuori_tema":
