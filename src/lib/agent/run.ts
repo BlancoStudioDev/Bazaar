@@ -441,9 +441,10 @@ async function checkRequest(options: {
   if (byRules) return byRules;
   if (process.env.GUARD_DISABLED === "true") return { ok: true, source: "non_verificato" };
 
-  // Modello più veloce tra i free con qualità decente: il compito è una classificazione breve.
+  // Il più veloce tra i free con qualità buona (un modello troppo piccolo sbaglia i follow-up ellittici):
+  // il compito è una classificazione breve, ma capire "me lo trovi a Milano?" richiede comprensione.
   const fast = options.registry.models
-    .filter((model) => model.scores.intelligence >= 50)
+    .filter((model) => model.scores.intelligence >= 62)
     .sort((a, b) => b.scores.speed - a.scores.speed)[0] ?? options.registry.selected ?? options.registry.routerModel;
   const primary = process.env.GUARD_MODEL
     ? options.registry.models.find((model) => model.id === process.env.GUARD_MODEL) ?? fast
