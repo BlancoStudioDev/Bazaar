@@ -71,6 +71,19 @@ function ebayEnv(): Record<string, string> {
   return out;
 }
 
+/**
+ * Modalità guest di Facebook (nessun cookie/account): FB_GUEST=1, e FB_PROXY per far uscire le richieste
+ * da un IP residenziale (Facebook blocca i datacenter). Si passano solo queste due variabili.
+ */
+function facebookEnv(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of ["FB_GUEST", "FB_PROXY"]) {
+    const value = process.env[key];
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
 export function getMcpServerConfigs(): McpServerConfig[] {
   const disabled = new Set(
     (process.env.MCP_DISABLED || "")
@@ -89,7 +102,7 @@ export function getMcpServerConfigs(): McpServerConfig[] {
       "search_marketplace",
       "get_listing",
       "search_location",
-    ], FACEBOOK_TOOL_TIMEOUT_MS),
+    ], FACEBOOK_TOOL_TIMEOUT_MS, facebookEnv()),
   ];
 
   return configs.filter((config) => !disabled.has(config.id));

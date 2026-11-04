@@ -132,3 +132,33 @@ Dipendenze (da `requirements.txt` di ciascun server): `mcp>=2.3,<3`, `curl_cffi>
 ### Facebook Marketplace sul server
 
 Sul server non c'è Chrome: la lettura cookie da Chrome macOS non funziona, quindi `MCP_DISABLED=facebook-marketplace`. Esiste però un modo supportato per fornire i cookie a mano (`fb.py`, `load_cookies`): variabile `FB_COOKIE_HEADER` (o `FACEBOOK_COOKIES`) con l'header `Cookie`, oppure un file `cookies.txt` (header, JSON o formato Netscape; percorso alternativo con `FB_COOKIE_FILE`) in `mcp/facebook-marketplace/`. Servono almeno `c_user` e `xs`. È un'opzione sconsigliata: i cookie sono una sessione personale completa del tuo account Facebook, scadono, e usarli da un IP datacenter può far scattare controlli o il blocco dell'account. Se la attivi: file `chmod 600`, fuori da git, rimuovi `facebook-marketplace` da `MCP_DISABLED`, rilancia il deploy.
+
+## Facebook sul server (senza cookie né account)
+
+Facebook mostra una pagina pubblica di Marketplace (circa 24 annunci per ricerca, con titolo, prezzo, città, foto e descrizione)
+a chi non è loggato, ma **solo se la richiesta arriva da un IP normale**: dagli IP dei datacenter (come il tuo server) risponde con
+la pagina di login. Per questo il server non usa nessun account: le richieste di Facebook escono dal tuo Mac di casa.
+
+```
+server (fb.py, FB_GUEST=1)  →  127.0.0.1:18081 del server  ══ tunnel SSH inverso ══>  proxy sul Mac  →  facebook.com
+```
+
+- `deploy/fb-egress-proxy.py` gira sul Mac, ascolta solo su `127.0.0.1` e accetta **soltanto** `CONNECT` verso la porta 443 di
+  `facebook.com` e `fbcdn.net`. Non è un proxy generico: il server non può usarlo per raggiungere la tua rete di casa o altri siti.
+- `deploy/fb-tunnel.sh` avvia il proxy e il tunnel (`ssh -R 127.0.0.1:18081:…`, in ascolto solo sul loopback del server) e lo riapre se cade.
+- Se il Mac è spento o offline, Facebook risponde con un errore chiaro e gli altri marketplace continuano a funzionare.
+- Limiti: niente ordinamento né paginazione (solo la prima pagina pubblica), solo le città presenti nella tabella `GUEST_SLUGS`
+  di `fb.py` (ID delle pagine città di Facebook), nessun monitor.
+
+Attivazione:
+
+1. Sul server, in `~/bazaar/.env.production`: togli `facebook-marketplace` da `MCP_DISABLED` e aggiungi `FB_GUEST=1`,
+   `FB_PROXY=http://127.0.0.1:18081` e `MCP_PYTHON_FACEBOOK=/home/blanco05/bazaar/mcp/facebook-marketplace/.venv/bin/python`.
+2. `./deploy/deploy.sh` (crea il venv di Facebook e copia `fb.py`).
+3. Sul Mac: `./deploy/fb-tunnel.sh` (in primo piano) oppure, per averlo sempre attivo al login:
+   ```bash
+   sed -e "s#@REPO@#$PWD#g" -e "s#@HOME@#$HOME#g" deploy/it.blancostudio.bazaar-fb.plist > ~/Library/LaunchAgents/it.blancostudio.bazaar-fb.plist
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/it.blancostudio.bazaar-fb.plist
+   ```
+   Per fermarlo: `launchctl bootout gui/$(id -u)/it.blancostudio.bazaar-fb`.
+4. Verifica: `curl -x http://127.0.0.1:18081 -s -o /dev/null -w '%{http_code}\n' https://www.facebook.com/marketplace/milan/` sul server (200).
