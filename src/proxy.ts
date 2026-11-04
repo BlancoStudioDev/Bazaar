@@ -19,8 +19,9 @@ export function proxy(request: NextRequest) {
 
   if (isAuthDisabled()) return NextResponse.next();
   if (getSessionCookie(request, { cookiePrefix: COOKIE_PREFIX })) return NextResponse.next();
-
   const { pathname, search } = request.nextUrl;
+  // "/" è la landing pubblica (senza sessione) o l'app (con sessione): decide la pagina con resolveSession().
+  if (pathname === "/") return NextResponse.next();
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
       { error: "Accedi per continuare." },
