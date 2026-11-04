@@ -26,6 +26,11 @@ const DEFAULT_TOOL_TIMEOUT_MS = Number(process.env.MCP_TOOL_TIMEOUT_MS) || 20_00
 // Facebook fa più richieste GraphQL e ha un rate limiter interno: se oltre 28 s è bloccato.
 const FACEBOOK_TOOL_TIMEOUT_MS = Number(process.env.MCP_TOOL_TIMEOUT_FACEBOOK_MS) || 28_000;
 
+// I comparatori (Trovaprezzi, idealo) fanno una richiesta extra per scheda con throttle di 2 s: ~13 s a ricerca.
+const COMPARATOR_TOOL_TIMEOUT_MS = Number(process.env.MCP_TOOL_TIMEOUT_COMPARATORS_MS) || 32_000;
+// MediaWorld legge fino a 2-3 pagine con throttle di 2 s.
+const MEDIAWORLD_TOOL_TIMEOUT_MS = Number(process.env.MCP_TOOL_TIMEOUT_MEDIAWORLD_MS) || 26_000;
+
 const MCP_ROOT = (process.env.MCP_ROOT || path.join(os.homedir(), ".config", "opencode", "mcp")).replace(
   /^~(?=$|\/)/,
   os.homedir(),
@@ -91,6 +96,13 @@ export function getMcpServerConfigs(): McpServerConfig[] {
       "get_listing",
       "search_location",
     ], FACEBOOK_TOOL_TIMEOUT_MS),
+    // Nuovi server: tutti nel venv condiviso (curl_cffi, beautifulsoup4, mcp).
+    server("wallapop", SHARED_PYTHON, "wallapop", ["search_wallapop"]),
+    server("trovaprezzi", SHARED_PYTHON, "trovaprezzi", ["search_trovaprezzi"], COMPARATOR_TOOL_TIMEOUT_MS),
+    server("idealo", SHARED_PYTHON, "idealo", ["search_idealo"], COMPARATOR_TOOL_TIMEOUT_MS),
+    server("mediaworld", SHARED_PYTHON, "mediaworld", ["search_mediaworld"], MEDIAWORLD_TOOL_TIMEOUT_MS),
+    server("unieuro", SHARED_PYTHON, "unieuro", ["search_unieuro"]),
+    server("zalando", SHARED_PYTHON, "zalando", ["search_zalando"]),
   ];
 
   return configs.filter((config) => !disabled.has(config.id));

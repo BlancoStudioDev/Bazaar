@@ -8,6 +8,7 @@ import {
   relevanceReason,
   type DiscardReason,
 } from "@/lib/mcp/plausibility";
+import { MARKETPLACES } from "@/lib/marketplaces";
 import { formatPrice } from "@/lib/ui";
 
 export { formatPrice };
@@ -68,8 +69,53 @@ function imageUrl(value: unknown): string | null {
   return raw || null;
 }
 
+/** Miniature dei comparatori: Trovaprezzi serve 100x100 per default, ma esistono anche le 300x300. */
+function upscaleThumbnail(url: string | null): string | null {
+  if (!url) return url;
+  return url
+    .replace("/it-100x100/", "/it-300x300/")
+    .replace(/tr=h-100(%2C|,)w-100/, "tr=h-300$1w-300");
+}
+
+function conditionFrom(value: unknown): string {
+  const raw = text(value);
+  if (!raw) return "Nuovo";
+  if (/ricondizionat|refurbished|renewed/i.test(raw)) return "Ricondizionato";
+  if (/usat|second\s*hand|seconda\s*mano|used/i.test(raw)) return "Usato";
+  return /^nuov/i.test(raw) ? "Nuovo" : raw;
+}
+
+function withBrand(title: string | null, brand: string | null): string {
+  const base = title || "";
+  if (!brand || !base) return base;
+  return base.toLowerCase().includes(brand.toLowerCase().split(" ")[0]) ? base : `${brand} ${base}`;
+}
+
+function comparatorId(server: MarketplaceId, url: string, page: string | null, index: number): string {
+  // Chiavi stabili e uniche: i link di tracciamento condividono il percorso (/relocator/relocate), cambiano i parametri.
+  try {
+    const parsed = new URL(url);
+    const offer = parsed.searchParams.get("offerKey");
+    if (offer) return `${server}-${offer}`;
+    const goto = parsed.pathname.match(/\/goto\/(\d+)/)?.[1];
+    if (goto) return `${server}-${goto}`;
+  } catch {
+    // ignore
+  }
+  const pageId = page?.match(/\/(\d{6,})\//)?.[1];
+  return pageId ? `${server}-${pageId}` : `${server}-${index}`;
+}
+
+function isSpanishPlace(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const parts = value.split(",").map((part) => foldPlace(part.trim()));
+  // «Barcelona, Barcelona»: provincia (ultimo elemento) spagnola.
+  return parts.length > 0 && SPANISH_PLACES.has(parts[parts.length - 1]);
+}
+
 /** Testo di descrizione pulito per il modello: niente HTML, URL, hashtag; spazi compattati; troncato. */
 export function cleanDescription(value: unknown, max = 300): string | null {
+  if (max <= 0) return null;
   const raw = Array.isArray(value) ? value.filter((v) => typeof v === "string").join(" | ") : value;
   if (typeof raw !== "string") return null;
   const cleaned = raw
@@ -125,6 +171,8 @@ function makeProduct(
 }
 
 export interface ToolOutput {
+  /** Query effettivamente cercata (serve a decidere quali dettagli, es. le taglie, mandare al modello). */
+  query?: string;
   data: unknown;
   products: Product[];
   rawText: string;
@@ -136,8 +184,39 @@ export interface ToolOutput {
 
 /** Massimo di annunci tenuti per singola chiamata di ricerca (uguale per ogni marketplace). */
 export const MAX_ITEMS_PER_CALL = 20;
-/** Massimo di annunci per marketplace nel JSON per il modello. */
+/** Massimo di annunci per marketplace nel JSON per il modello (fino a MANY_STORES_AFTER negozi interrogati). */
 export const MAX_ITEMS_FOR_MODEL = 6;
+/** Oltre questo numero di negozi interrogati nello stesso giro il modello riceve meno annunci per negozio. */
+export const MANY_STORES_AFTER = 6;
+export const MAX_ITEMS_FOR_MODEL_MANY = 4;
+/** Tetto totale di caratteri dei tool result per giro (≈ 5-6k token). */
+export const MAX_TOTAL_TOOL_CHARS = 19_000;
+
+/** Annunci per negozio e caratteri per tool result da mandare al modello, in base a quanti negozi sono stati interrogati. */
+export function modelBudget(searchCount: number): { items: number; chars: number } {
+  return searchCount > MANY_STORES_AFTER
+    ? { items: MAX_ITEMS_FOR_MODEL_MANY, chars: 3_400 }
+    : { items: MAX_ITEMS_FOR_MODEL, chars: 6_000 };
+}
+
+/** Comparatori di prezzo: il «venditore» è il negozio che offre il prezzo, non il sito. */
+const COMPARATORS = new Set<MarketplaceId>(["trovaprezzi", "idealo"]);
+/** Negozi nuovi (retail): `condizione` assente = nuovo, e non spostano troppo la mediana dei prezzi. */
+const RETAIL = new Set<MarketplaceId>(["trovaprezzi", "idealo", "mediaworld", "unieuro", "zalando"]);
+/** Massimo di prezzi per chiamata che un negozio retail aggiunge alla mediana di riferimento. */
+const RETAIL_POOL_SAMPLE = 8;
+
+/** Province spagnole: l'API di Wallapop a volte mescola annunci spagnoli ai risultati italiani. */
+const SPANISH_PLACES = new Set(
+  [
+    "barcelona", "madrid", "valencia", "sevilla", "zaragoza", "malaga", "murcia", "alicante", "bilbao",
+    "vizcaya", "bizkaia", "granada", "cordoba", "valladolid", "pontevedra", "a coruna", "la coruna",
+    "asturias", "baleares", "illes balears", "las palmas", "santa cruz de tenerife", "girona", "gerona",
+    "tarragona", "lleida", "navarra", "cantabria", "toledo", "badajoz", "caceres", "cadiz", "huelva",
+    "jaen", "almeria", "castellon", "albacete", "guipuzcoa", "gipuzkoa", "alava", "la rioja", "leon",
+    "burgos", "salamanca", "lugo", "ourense", "tenerife", "mallorca", "ibiza",
+  ].map((value) => value),
+);
 
 const FB_ITEM_BASE = "https://www.facebook.com/marketplace/item/";
 
@@ -209,8 +288,16 @@ function curate(
     const dedupeKey = product.url || product.key;
     if (seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
+    // I comparatori ripetono la stessa offerta con link di tracciamento diversi: stesso prodotto, negozio e prezzo.
+    if (COMPARATORS.has(server)) {
+      const sameOffer = `${product.title}|${product.seller}|${product.price}`.toLowerCase();
+      if (seen.has(sameOffer)) return;
+      seen.add(sameOffer);
+    }
     if (query) {
-      const reason = nonProductReason(product.title, query) || relevanceReason(product.title, query);
+      const reason =
+        nonProductReason(product.title, query) ||
+        relevanceReason(product.title, query, { digitsOnly: server === "zalando" });
       if (reason) return drop(reason);
     } else {
       const reason = nonProductReason(product.title, "");
@@ -224,7 +311,9 @@ function curate(
   const ownPrices = stage
     .map((entry) => entry.product.price)
     .filter((price): price is number => price != null && price > 0);
-  const reference = referenceMedian(key, ownPrices);
+  // I negozi retail contribuiscono con un campione limitato: la mediana non deve spostarsi verso i prezzi
+  // di listino e far passare per «sospetti» gli affari dell'usato.
+  const reference = referenceMedian(key, RETAIL.has(server) ? ownPrices.slice(0, RETAIL_POOL_SAMPLE) : ownPrices);
 
   const kept: Entry[] = [];
   for (const entry of stage) {
@@ -326,12 +415,14 @@ export function normalizeToolOutput(
   let total: number | undefined;
   let outData: Record<string, unknown> = record;
   let discarded: ToolOutput["discarded"];
+  let searchedQuery: string | undefined;
   const query = queryFromRecord(record, args);
 
   const finishSearch = (listKey: string, items: unknown[], mapped: Array<Product | null>) => {
     const curated = curate(server, items, mapped, query);
     products = curated.products;
     discarded = curated.discarded;
+    searchedQuery = query;
     outData = {
       ...record,
       [listKey]: curated.rows,
@@ -477,6 +568,106 @@ export function normalizeToolOutput(
       });
     });
     finishSearch("annunci", items, mapped);
+  } else if (server === "wallapop") {
+    const items = asArray(record.risultati);
+    total = typeof record.totale === "number" ? record.totale : items.length;
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      if (isSpanishPlace(row.luogo)) return null;
+      const url = safeUrl(row.link ?? row.url);
+      const id = idFromUrl(url, `wallapop-${index}`);
+      const date = text(row.data);
+      return makeProduct("wallapop", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        // L'API di ricerca non espone condizione e venditore: Wallapop qui è sempre seconda mano tra privati.
+        condition: text(row.condizione) || "Usato",
+        location: text(row.luogo),
+        seller: text(row.venditore) || "Privato",
+        extra: date ? `Pubblicato: ${date.slice(0, 10)}` : null,
+      });
+    });
+    finishSearch("risultati", items, mapped);
+  } else if (server === "trovaprezzi" || server === "idealo") {
+    const items = asArray(record.risultati);
+    total = typeof record.totale === "number" ? record.totale : items.length;
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      // `link` è il redirect di tracciamento verso il negozio; `pagina_prodotto` la scheda di confronto.
+      const page = safeUrl(row.pagina_prodotto) || null;
+      const url = safeUrl(row.link ?? row.url) || page || "";
+      const id = comparatorId(server, url, page, index);
+      const offers = typeof row.n_offerte === "number" && row.n_offerte > 1 ? `${row.n_offerte} offerte` : null;
+      const shop = text(row.negozio);
+      const product = makeProduct(server, id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+        image: upscaleThumbnail(imageUrl(row.immagine)),
+        condition: conditionFrom(row.condizione),
+        seller: shop,
+        extra: [shop ? `Da ${shop}` : null, offers].filter(Boolean).join(" · ") || null,
+        pageUrl: page,
+      });
+      return product;
+    });
+    finishSearch("risultati", items, mapped);
+  } else if (server === "mediaworld") {
+    const items = asArray(record.risultati);
+    total = typeof record.totale === "number" ? record.totale : items.length;
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.link ?? row.url);
+      const id = url.match(/-(\d{6,})\.html/)?.[1] || idFromUrl(url, `mediaworld-${index}`);
+      const description = text(row.descrizione);
+      const sold = description?.match(/Venduto da (.+?)(?:\.|$)/i)?.[1]?.trim();
+      const notes = [
+        text(row.sconto) ? `Sconto ${text(row.sconto)}${text(row.prezzo_originale) ? ` (listino ${text(row.prezzo_originale)})` : ""}` : null,
+        text(row.disponibilita),
+      ].filter(Boolean);
+      return makeProduct("mediaworld", id, withBrand(text(row.titolo), text(row.marca)), text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        condition: conditionFrom(row.condizione),
+        seller: sold || "MediaWorld",
+        extra: notes.length ? notes.join(" · ") : null,
+      });
+    });
+    finishSearch("risultati", items, mapped);
+  } else if (server === "zalando") {
+    const items = asArray(record.risultati);
+    total = typeof record.totale === "number" ? record.totale : items.length;
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.link ?? row.url);
+      const id = url.match(/-([a-z0-9]{6,}-[a-z0-9]{3})\.html/i)?.[1] || idFromUrl(url, `zalando-${index}`);
+      const notes = [
+        text(row.sconto) ? `Saldo ${text(row.sconto)}${text(row.prezzo_originale) ? ` (listino ${text(row.prezzo_originale)})` : ""}` : null,
+      ].filter(Boolean);
+      return makeProduct("zalando", id, withBrand(text(row.titolo), text(row.marca)), text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        condition: conditionFrom(row.condizione),
+        seller: "Zalando",
+        extra: notes.length ? notes.join(" · ") : null,
+      });
+    });
+    finishSearch("risultati", items, mapped);
+  } else if (server === "unieuro") {
+    const items = asArray(record.risultati);
+    total = typeof record.totale === "number" ? record.totale : items.length;
+    const mapped = items.map((item, index) => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const url = safeUrl(row.link ?? row.url);
+      const id = idFromUrl(url, `unieuro-${index}`);
+      // `luogo` è «Online (spedizione o ritiro in negozio)»: non è una località, non va nel campo luogo.
+      return makeProduct("unieuro", id, text(row.titolo) || "", text(row.prezzo), num(row.prezzo_num), url, {
+        image: imageUrl(row.immagine),
+        condition: conditionFrom(row.condizione),
+        seller: text(row.venditore) || "Unieuro",
+        extra: "Spedizione o ritiro in negozio",
+      });
+    });
+    finishSearch("risultati", items, mapped);
   } else if (tool.startsWith("get_")) {
     const detail = record;
     const url =
@@ -497,6 +688,7 @@ export function normalizeToolOutput(
   }
 
   return {
+    query: searchedQuery,
     data: outData,
     products: dedupeProducts(products),
     rawText: trimmed,
@@ -527,22 +719,26 @@ function pick(record: Record<string, unknown>, keys: string[]): Record<string, u
   return out;
 }
 
-function shortUrl(value: unknown): string | undefined {
+function shortUrl(value: unknown, max = 120): string | undefined {
   const raw = text(value);
   if (!raw) return undefined;
   try {
     const parsed = new URL(raw.startsWith("//") ? `https:${raw}` : raw);
-    return `${parsed.origin}${parsed.pathname}`.replace(/\/ref=.*$/, "").slice(0, 120);
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/ref=.*$/, "").slice(0, max);
   } catch {
-    return raw.slice(0, 120);
+    return raw.slice(0, max);
   }
 }
 
-function essential(row: Record<string, unknown>, server: MarketplaceId): Record<string, unknown> {
+function essential(
+  row: Record<string, unknown>,
+  server: MarketplaceId,
+  options: { query?: string } = {},
+): Record<string, unknown> {
   const priceRaw = row.prezzo_num ?? row.prezzo;
   const out: Record<string, unknown> = {};
   const title = text(row.titolo);
-  if (title) out.titolo = title.slice(0, 90);
+  if (title) out.titolo = title.slice(0, RETAIL.has(server) ? 80 : 90);
   const price = num(priceRaw);
   if (server === "ebay") {
     // Venduto in USD/GBP: mai un numero nudo (il modello lo scambierebbe per euro).
@@ -554,12 +750,18 @@ function essential(row: Record<string, unknown>, server: MarketplaceId): Record<
     if (sold) out.venduto_il = sold;
   } else if (price != null) out.prezzo_num = price;
   const condition = text(row.condizioni) || text(row.condizione) || (server === "amazon" || server === "aliexpress" ? "nuovo" : undefined);
-  if (condition) out.condizione = condition;
-  const place = text(row.luogo);
+  // Nei negozi nuovi (comparatori, MediaWorld, Unieuro, Zalando) «nuovo» è la norma: si scrive solo l'eccezione.
+  if (condition && !(RETAIL.has(server) && /^nuov/i.test(condition))) out.condizione = condition;
+  const place = server === "unieuro" ? null : text(row.luogo);
   if (place) out.luogo = place.slice(0, 40);
   const format = text(row.formato);
   if (format) out.formato = format;
-  const url = shortUrl(row.url ?? row.link);
+  // Comparatori: il link di tracciamento è lungo e non sopravvive al taglio dei parametri; al modello va la scheda di confronto.
+  // I percorsi dei negozi (MediaWorld, idealo...) sono lunghi: tagliati a metà non aprono più la pagina.
+  const url = shortUrl(
+    COMPARATORS.has(server) ? row.pagina_prodotto ?? row.url ?? row.link : row.url ?? row.link,
+    RETAIL.has(server) ? 220 : 120,
+  );
   if (url) out.url = url;
   if (server === "subito") {
     const shipping = subitoShipping(row);
@@ -569,10 +771,42 @@ function essential(row: Record<string, unknown>, server: MarketplaceId): Record<
     const date = text(row.data);
     if (date) out.data = date.slice(0, 10);
   }
+  if (COMPARATORS.has(server)) {
+    const shop = text(row.negozio);
+    if (shop) out.negozio = shop.slice(0, 30);
+    if (typeof row.n_offerte === "number" && row.n_offerte > 1) out.n_offerte = row.n_offerte;
+  }
+  if (server === "mediaworld" || server === "zalando") {
+    const discount = text(row.sconto);
+    if (discount) out.sconto = discount;
+  }
+  if (server === "wallapop") {
+    const date = text(row.data);
+    if (date) out.data = date.slice(0, 10);
+  }
+  if (server === "zalando" && Array.isArray(row.taglie) && options.query && /(?:^|[^\d.,])(?:2[89]|3\d|4\d|5[0-2])(?:[.,]5)?(?!\d)/.test(options.query)) {
+    // Le taglie costano token: solo se la ricerca ne nomina una.
+    out.taglie = row.taglie.filter((size) => typeof size === "string").slice(0, 24).join(",");
+  }
   // Solo i candidati arricchiti (vedi agent/enrich.ts) portano una descrizione.
-  const description = cleanDescription(row.descrizione, 240);
+  const description = cleanDescription(row.descrizione, Math.min(240, descriptionCap(server)));
   if (description) out.descrizione = description;
   return out;
+}
+
+/** Lunghezza massima della descrizione per il modello; 0 = mai (testi promozionali, descrizioni di foto). */
+export function descriptionCap(server: MarketplaceId): number {
+  switch (server) {
+    case "trovaprezzi":
+    case "zalando":
+    case "unieuro":
+      return 0;
+    case "idealo":
+    case "mediaworld":
+      return 140;
+    default:
+      return 300;
+  }
 }
 
 /** "Spedizione 0,99 €" / "Solo ritiro a mano" dai campi del server Subito (null se il dato manca). */
@@ -624,11 +858,12 @@ export function compactToolOutputForModel(
   const items = asArray(record.risultati ?? record.annunci ?? record.items ?? record.listings).slice(0, maxItems);
   const compactItems = items.map((item) => {
     const row = asRecord(item);
-    return row ? essential(row, server) : item;
+    return row ? essential(row, server, { query: output.query }) : item;
   });
 
   const notes = [
-    text(record.nota),
+    // Le note dei comparatori sono sui limiti dello scraping, non servono al modello.
+    COMPARATORS.has(server) ? null : text(record.nota),
     record.filtro_citta
       ? items.length ? `solo annunci a ${record.filtro_citta}` : `NESSUN annuncio a ${record.filtro_citta}: dillo esplicitamente all'utente`
       : null,
@@ -682,7 +917,7 @@ export function summarizeToolContentForModel(content: string): string {
 }
 
 
-const LOCATED_SERVERS = new Set<MarketplaceId>(["subito", "facebook-marketplace"]);
+const LOCATED_SERVERS = new Set<MarketplaceId>(["subito", "facebook-marketplace", "wallapop"]);
 
 function foldPlace(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -691,7 +926,7 @@ function foldPlace(value: string): string {
 /**
  * Se l'utente ha nominato una città, gli annunci locali (Subito, Facebook) devono
  * trovarsi lì: il modello non deve poter "dedurre" una località che l'annuncio non ha.
- * I marketplace senza località (Amazon, AliExpress, Vinted) restano invariati.
+ * I marketplace senza località (Amazon, AliExpress, Vinted, negozi e comparatori) restano invariati.
  */
 export function filterOutputByCity(server: MarketplaceId, output: ToolOutput, city: string): ToolOutput {
   if (!LOCATED_SERVERS.has(server) || !city.trim()) return output;

@@ -52,7 +52,10 @@ export function ProductCard({ product }: { product: Product }) {
   const { lang } = useT();
   const price = displayPrice(product, lang);
   const meta = MARKETPLACES[product.marketplace];
-  const detail = product.condition ? conditionLabel(product.condition, lang) : product.location;
+  const base = product.condition ? conditionLabel(product.condition, lang) : product.location;
+  // Comparatori: il «venditore» è il negozio che offre il prezzo.
+  const shop = meta?.tag === "confronto" ? product.seller : null;
+  const detail = [base, shop].filter(Boolean).join(" · ") || null;
 
   return (
     <a

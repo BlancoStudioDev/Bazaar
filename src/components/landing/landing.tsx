@@ -17,6 +17,10 @@ const MARKETPLACES = [
   { name: "AliExpress", cls: "lp-brand-mono" },
   { name: "Vinted", cls: "lp-brand-serif-i" },
   { name: "Subito.it", cls: "lp-brand-mono-b" },
+  { name: "Wallapop", cls: "lp-brand-serif-i" },
+  { name: "Trovaprezzi", cls: "lp-brand-mono" },
+  { name: "MediaWorld", cls: "lp-brand-serif" },
+  { name: "Zalando", cls: "lp-brand-mono-b" },
 ];
 
 const DEMO_ROWS = [

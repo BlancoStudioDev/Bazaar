@@ -57,7 +57,7 @@ export function ruleCheck(text: string): GuardVerdict | null {
   return null;
 }
 
-const GUARD_SYSTEM = `Sei il filtro di ingresso di Bazaar, un assistente che SOLO cerca e confronta prodotti sui marketplace (Amazon, eBay, AliExpress, Vinted, Subito, Facebook Marketplace).
+const GUARD_SYSTEM = `Sei il filtro di ingresso di Bazaar, un assistente che SOLO cerca e confronta prodotti sui marketplace (Amazon, eBay, AliExpress, Vinted, Subito, Wallapop, Facebook Marketplace, Trovaprezzi, idealo, MediaWorld, Unieuro, Zalando).
 Decidi se l'ULTIMO messaggio dell'utente è una richiesta legittima per questo servizio.
 Il messaggio può essere in QUALSIASI lingua (italiano, inglese, spagnolo, francese, tedesco, giapponese...): classificalo per significato, non per lingua. Una richiesta di prodotti in qualunque lingua è legittima; "fuori_tema" riguarda l'argomento, mai la lingua.
 

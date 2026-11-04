@@ -55,7 +55,7 @@ export function Composer({
 
   const enabled = store.settings.enabledMarketplaces.length;
   const local = store.settings.enabledMarketplaces.some(
-    (id) => id === "facebook-marketplace" || id === "subito",
+    (id) => id === "facebook-marketplace" || id === "subito" || id === "wallapop",
   );
   const scope = local
     ? t("composer.scopeCity", { count: enabled, city: store.settings.city.trim() || "Milano" })

@@ -2,6 +2,7 @@ import { getMcpManager } from "@/lib/mcp/manager";
 import {
   MAX_ITEMS_FOR_MODEL,
   cleanDescription,
+  descriptionCap,
   descriptionFromDetail,
   normalizeToolOutput,
   type ToolOutput,
@@ -10,6 +11,9 @@ import type { MarketplaceId } from "@/lib/types";
 
 /** Candidati con descrizione per marketplace (quelli che il modello userà per verificare i vincoli). */
 const PER_SERVER = 4;
+/** Con molti negozi interrogati: meno candidati e descrizioni più corte (il contesto del modello è il vincolo). */
+const PER_SERVER_MANY = 2;
+const DESCRIPTION_CHARS_MANY = 170;
 /** Chiamate di dettaglio totali per richiesta. */
 const MAX_DETAIL_CALLS = 10;
 const DETAIL_TIMEOUT_MS = 8_000;
@@ -42,7 +46,11 @@ function priceOf(row: Row): number {
  * Generico: non conosce categorie né parole chiave. Tollerante agli errori e ai timeout.
  * Modifica le righe in `output.data` e `product.extra`; restituisce quanti prodotti sono cambiati.
  */
-export async function enrichWithDescriptions(executions: SearchExecution[], signal?: AbortSignal): Promise<number> {
+export async function enrichWithDescriptions(
+  executions: SearchExecution[],
+  signal?: AbortSignal,
+  maxItems = MAX_ITEMS_FOR_MODEL,
+): Promise<number> {
   const manager = getMcpManager();
   type Job = { exec: SearchExecution; row: Row; productId: string; detailTool: { name: string; param: string; json: boolean } };
   const jobs: Job[] = [];
@@ -63,11 +71,14 @@ export async function enrichWithDescriptions(executions: SearchExecution[], sign
   for (const exec of executions) {
     if (!exec.ok) continue;
     const rows = rowsOf(exec.output);
-    const shown = new Set(rows.slice(0, MAX_ITEMS_FOR_MODEL));
+    const many = maxItems < MAX_ITEMS_FOR_MODEL;
+    const shown = new Set(rows.slice(0, maxItems));
+    // Con molti negozi meno candidati con descrizione: il contesto del modello è il vincolo.
     const candidates = rows
       .filter((row) => shown.has(row))
       .sort((a, b) => priceOf(a) - priceOf(b))
-      .slice(0, PER_SERVER);
+      .slice(0, many ? PER_SERVER_MANY : PER_SERVER);
+    const cap = Math.min(many ? DESCRIPTION_CHARS_MANY : DESCRIPTION_CHARS, descriptionCap(exec.server));
     const detail = detailToolFor(exec.server);
     const serverJobs: Job[] = [];
     for (const row of rows) {
@@ -75,7 +86,11 @@ export async function enrichWithDescriptions(executions: SearchExecution[], sign
         delete row.descrizione; // niente descrizioni fuori dai candidati: il modello non le riceve
         continue;
       }
-      const inline = cleanDescription(row.descrizione, DESCRIPTION_CHARS);
+      if (cap === 0) {
+        delete row.descrizione; // testi promozionali o descrizioni di foto: niente per il modello né per la Bacheca
+        continue;
+      }
+      const inline = cleanDescription(row.descrizione, cap);
       const product = exec.output.products.find((p) => p.url === row.url);
       if (inline) {
         row.descrizione = inline;

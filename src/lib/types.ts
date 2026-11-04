@@ -4,7 +4,13 @@ export type MarketplaceId =
   | "aliexpress"
   | "vinted"
   | "subito"
-  | "facebook-marketplace";
+  | "facebook-marketplace"
+  | "trovaprezzi"
+  | "idealo"
+  | "mediaworld"
+  | "zalando"
+  | "unieuro"
+  | "wallapop";
 
 export type ServerStatus = "idle" | "connecting" | "online" | "offline";
 
@@ -24,6 +30,8 @@ export interface Product {
   reviews?: number | null;
   extra?: string | null;
   query?: string | null;
+  /** Pagina di confronto/scheda prodotto quando `url` è un link di tracciamento verso il negozio (Trovaprezzi, idealo). */
+  pageUrl?: string | null;
 }
 
 export interface ToolActivity {

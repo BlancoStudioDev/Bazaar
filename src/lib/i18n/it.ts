@@ -14,7 +14,7 @@ export const it = {
   "brand.tagline2": "per ogni affare.",
   "meta.title": "Bazaar — il fiuto giusto per ogni affare",
   "meta.description":
-    "Il personal shopper con il fiuto per gli affari: cerca su Amazon, eBay, AliExpress, Vinted, Subito e Facebook Marketplace in un'unica chat, confronta prezzi reali e ti dice dove costa meno.",
+    "Il personal shopper con il fiuto per gli affari: cerca su Amazon, eBay, AliExpress, Vinted, Subito, Wallapop, Facebook Marketplace, Trovaprezzi, idealo, MediaWorld, Unieuro e Zalando in un'unica chat, confronta prezzi reali e ti dice dove costa meno.",
   "meta.ogDescription": "Il personal shopper che confronta prezzi reali su più marketplace e ti dice dove costa meno.",
 
   // Shell
@@ -243,11 +243,11 @@ export const it = {
   "srv.paidPrice": ", ~${price} per 1M token",
   "srv.paidTag": "a pagamento",
   "srv.localAds":
-    "Annunci locali a {city}: {parts}. Amazon, eBay, AliExpress e Vinted spediscono da altrove.",
+    "Annunci locali a {city}: {parts}. Amazon, eBay, AliExpress, Vinted e i negozi online spediscono da altrove.",
   "srv.maxRounds": "Fiuto ha fatto abbastanza giri per questa risposta: concludo con quello che ho trovato.",
   "srv.filterLabel": "Filtro Bazaar",
   "guard.fuori_tema":
-    "Qui Fiuto fa una cosa sola, ma la fa bene: annusare affari sui marketplace (Amazon, AliExpress, Vinted, Subito, Facebook Marketplace). Dimmi cosa vorresti comprare, per esempio «una RTX 4070 usata a Milano».",
+    "Qui Fiuto fa una cosa sola, ma la fa bene: annusare affari sui marketplace (Amazon, AliExpress, Vinted, Subito, Wallapop, Facebook Marketplace, Trovaprezzi, idealo, MediaWorld, Unieuro, Zalando). Dimmi cosa vorresti comprare, per esempio «una RTX 4070 usata a Milano».",
   "guard.illegale":
     "Questa bancarella Fiuto non la frequenta. Posso però cercare prodotti in regola: dimmi cosa ti serve.",
   "guard.abuso": "Meglio rimettere il naso sugli affari. Scrivimi che prodotto cerchi e lo confronto per te.",
@@ -259,16 +259,16 @@ export const it = {
   // Landing
   "lp.metaTitle": "Bazaar: il fiuto giusto per ogni affare",
   "lp.metaDescription":
-    "Scrivi cosa cerchi: Fiuto fa il giro di Amazon, AliExpress, Vinted e Subito.it, legge gli annunci e ti dice dove costa meno. Una chat sola, link diretti, nessuna carta.",
+    "Scrivi cosa cerchi: Fiuto fa il giro di Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando e altri, legge gli annunci e ti dice dove costa meno. Una chat sola, link diretti, nessuna carta.",
   "lp.ldDescription":
-    "Una chat che cerca su Amazon, AliExpress, Vinted e Subito.it, legge le descrizioni degli annunci e confronta i prezzi. Non vende prodotti.",
+    "Una chat che cerca su Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando e altri, legge le descrizioni degli annunci e confronta i prezzi. Non vende prodotti.",
   "lp.skip": "Vai al contenuto",
   "lp.homeAria": "Bazaar, pagina iniziale",
   "lp.signIn": "Accedi",
   "lp.langLabel": "Lingua",
   "lp.h1a": "Basta venti schede aperte.",
   "lp.h1b": "Chiedilo a Fiuto.",
-  "lp.lead": "Una chat sola fa il giro di Amazon, AliExpress, Vinted e Subito.it e ti dice dove conviene davvero.",
+  "lp.lead": "Una chat sola fa il giro di Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando e altri, e ti dice dove conviene davvero.",
   "lp.cta": "Accedi con OnionRings",
   "lp.trust": "Accesso con il tuo account OnionRings · nessuna carta richiesta",
   "lp.foxTitle": "Fiuto, la volpe del deserto, dietro la sua bancarella",
@@ -303,8 +303,8 @@ export const it = {
   "lp.run": "Fiuto ha girato 4 bancarelle · 27 annunci",
   "lp.diffTitle1": "Cosa fa",
   "lp.diffTitle2": "di diverso",
-  "lp.d1.title": "Quattro bancarelle, una domanda",
-  "lp.d1.body": "Amazon, AliExpress, Vinted e Subito.it in un colpo solo. Niente venti schede aperte una accanto all'altra.",
+  "lp.d1.title": "Tante bancarelle, una domanda",
+  "lp.d1.body": "Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando e altri in un colpo solo. Niente venti schede aperte una accanto all'altra.",
   "lp.d2.title": "Legge le descrizioni, non solo i titoli",
   "lp.d2.body": "Il titolo dice «SSD 1 TB», la descrizione dice «solo la custodia». Fiuto le legge tutte e due.",
   "lp.d3.title": "Scarta le trappole",
@@ -337,7 +337,7 @@ export const it = {
   "lp.f5.a":
     "Per tenere dei limiti d'uso equi per tutti e per far funzionare la condivisione delle chat. Si entra con il tuo account OnionRings, senza carta.",
   "lp.f6.q": "E Facebook Marketplace?",
-  "lp.f6.a": "Non ancora. Per ora Fiuto cerca su Amazon, AliExpress, Vinted e Subito.it.",
+  "lp.f6.a": "Non ancora. Per ora Fiuto cerca su Amazon, AliExpress, Vinted, Subito.it, Wallapop, Trovaprezzi, idealo, MediaWorld, Unieuro e Zalando.",
   "lp.finalTitle": "Il banco è aperto.",
   "lp.finalLead": "Dimmi cosa cerchi. Al resto pensa Fiuto.",
   "lp.footerBy": "Bazaar by BlancoStudio",

@@ -142,7 +142,7 @@ export function ConnectionsDialog({
             );
           })}
         </div>
-        {enabled.includes("facebook-marketplace") || enabled.includes("subito") ? (
+        {enabled.includes("facebook-marketplace") || enabled.includes("subito") || enabled.includes("wallapop") ? (
           <label className="mt-3 flex items-center justify-between gap-4">
             <span className="text-[13px] text-ink">{t("settings.city")}</span>
             <input

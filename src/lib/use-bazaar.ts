@@ -32,6 +32,12 @@ export interface Settings {
   modelMode: "auto" | "manual";
   modelId: string | null;
   enabledMarketplaces: MarketplaceId[];
+  /**
+   * Marketplace che l'utente ha già «visto» quando ha salvato le impostazioni: quelli non presenti qui
+   * (aggiunti dopo) risultano attivi di default, senza toccare le scelte esistenti. Manca nelle impostazioni
+   * salvate prima: vale l'elenco storico.
+   */
+  knownMarketplaces?: MarketplaceId[];
   city: string;
   allowPaidFallback: boolean;
   /** Lingua dell'interfaccia: "auto" = dal browser. Campo aggiunto senza bump di versione (manca = "auto"). */
@@ -41,10 +47,16 @@ export interface Settings {
 
 const SETTINGS_VERSION = 3;
 
+/** I sei marketplace esistenti prima dei comparatori e dei negozi: impostazioni senza `knownMarketplaces` partono da qui. */
+const LEGACY_MARKETPLACES: MarketplaceId[] = [
+  "amazon", "ebay", "aliexpress", "vinted", "subito", "facebook-marketplace",
+];
+
 const DEFAULT_SETTINGS: Settings = {
   modelMode: "auto",
   modelId: null,
   enabledMarketplaces: [...MARKETPLACE_IDS],
+  knownMarketplaces: [...MARKETPLACE_IDS],
   city: "Milano",
   allowPaidFallback: false,
   lang: "auto",
@@ -97,13 +109,20 @@ function sanitizeSettings(value: unknown): Settings {
         MARKETPLACE_IDS.includes(id as MarketplaceId),
       )
     : DEFAULT_SETTINGS.enabledMarketplaces;
+  // Marketplace nuovi (non noti alle impostazioni salvate): attivi di default, le scelte già fatte restano.
+  const known = Array.isArray(raw.knownMarketplaces)
+    ? raw.knownMarketplaces.filter((id): id is MarketplaceId => MARKETPLACE_IDS.includes(id as MarketplaceId))
+    : LEGACY_MARKETPLACES;
+  const added = MARKETPLACE_IDS.filter((id) => !known.includes(id) && !enabled.includes(id));
+  const enabledWithNew = enabled.length ? [...enabled, ...added] : enabled;
   // v3: la riserva economica è spenta di default (costi zero). Le impostazioni
   // salvate con versioni precedenti ripartono da false; dalla v3 vale la scelta salvata.
   const migrated = raw.settingsVersion !== SETTINGS_VERSION;
   return {
     modelMode: raw.modelMode === "manual" ? "manual" : "auto",
     modelId: typeof raw.modelId === "string" ? raw.modelId : null,
-    enabledMarketplaces: enabled.length ? enabled : DEFAULT_SETTINGS.enabledMarketplaces,
+    enabledMarketplaces: enabledWithNew.length ? enabledWithNew : DEFAULT_SETTINGS.enabledMarketplaces,
+    knownMarketplaces: [...MARKETPLACE_IDS],
     city: typeof raw.city === "string" && raw.city.trim() ? raw.city.trim().slice(0, 60) : "Milano",
     allowPaidFallback: migrated ? false : raw.allowPaidFallback === true,
     lang: isLangSetting(raw.lang) ? raw.lang : "auto",

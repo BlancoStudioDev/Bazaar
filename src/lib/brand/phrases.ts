@@ -55,11 +55,41 @@ const PACKS: Record<Lang, PhrasePack> = {
         "Fiuto sbircia le vetrine di quartiere…",
         "Su Marketplace si tratta con una stretta di mano…",
       ],
+      wallapop: [
+        "Fiuto bussa alle porte dei privati su Wallapop…",
+        "Su Wallapop si vende da casa, Fiuto ci ficca il naso…",
+        "Giro tra le soffitte di Wallapop…",
+      ],
+      trovaprezzi: [
+        "Fiuto chiede il conto a mille negozi su Trovaprezzi…",
+        "Su Trovaprezzi i negozi litigano per il prezzo migliore…",
+        "Fiuto fa il giro dei negozi online via Trovaprezzi…",
+      ],
+      idealo: [
+        "Fiuto confronta i listini su idealo…",
+        "Su idealo cerco il negozio che costa meno…",
+        "Fiuto stana il prezzo più basso su idealo…",
+      ],
+      mediaworld: [
+        "Fiuto entra da MediaWorld, tra gli scaffali di elettronica…",
+        "Cerco il bollino rosso da MediaWorld…",
+        "Un giro tra i frigoriferi e i televisori di MediaWorld…",
+      ],
+      unieuro: [
+        "Fiuto passa da Unieuro a controllare i cartellini…",
+        "Tra gli elettrodomestici di Unieuro c'è odore di sconto…",
+        "Fiuto fa la fila alla cassa di Unieuro…",
+      ],
+      zalando: [
+        "Fiuto prova le scarpe da Zalando…",
+        "Frugo tra gli scaffali della moda su Zalando…",
+        "Su Zalando i saldi si fiutano a distanza…",
+      ],
     },
     many: [
       "Fiuto corre di bancarella in bancarella…",
       "Fiuto fa il giro del bazar, tutto in parallelo…",
-      "Cinque bancarelle, un solo naso…",
+      "Una dozzina di bancarelle, un solo naso…",
     ],
     reading: [
       "Leggo le descrizioni: i titoli raccontano solo metà storia…",
@@ -89,6 +119,12 @@ const PACKS: Record<Lang, PhrasePack> = {
       search_marketplace: "Chiedo su Facebook Marketplace",
       get_listing: "Apro l'annuncio Facebook",
       search_location: "Cerco la località",
+      search_wallapop: "Giro su Wallapop",
+      search_trovaprezzi: "Interrogo Trovaprezzi",
+      search_idealo: "Confronto su idealo",
+      search_mediaworld: "Giro da MediaWorld",
+      search_unieuro: "Giro da Unieuro",
+      search_zalando: "Sfoglio Zalando",
     },
   },
   en: {
@@ -125,11 +161,41 @@ const PACKS: Record<Lang, PhrasePack> = {
         "Fiuto peeks into the local shop windows…",
         "On Marketplace deals are sealed with a handshake…",
       ],
+      wallapop: [
+        "Fiuto knocks on private doors on Wallapop…",
+        "On Wallapop people sell from home, Fiuto pokes his nose in…",
+        "Rummaging through Wallapop's attics…",
+      ],
+      trovaprezzi: [
+        "Fiuto asks a thousand shops for their price on Trovaprezzi…",
+        "On Trovaprezzi the shops fight over the best price…",
+        "Fiuto tours the online shops through Trovaprezzi…",
+      ],
+      idealo: [
+        "Fiuto compares price lists on idealo…",
+        "Hunting for the cheapest shop on idealo…",
+        "Fiuto sniffs out the lowest price on idealo…",
+      ],
+      mediaworld: [
+        "Fiuto walks into MediaWorld, among the electronics shelves…",
+        "Looking for the red tag at MediaWorld…",
+        "A stroll past MediaWorld's fridges and TVs…",
+      ],
+      unieuro: [
+        "Fiuto drops by Unieuro to check the price tags…",
+        "Among Unieuro's appliances there's a whiff of discount…",
+        "Fiuto queues at the Unieuro checkout…",
+      ],
+      zalando: [
+        "Fiuto tries on shoes at Zalando…",
+        "Rummaging through the fashion shelves on Zalando…",
+        "On Zalando Fiuto can smell a sale from afar…",
+      ],
     },
     many: [
       "Fiuto runs from stall to stall…",
       "Fiuto tours the whole bazaar, all in parallel…",
-      "Five stalls, one nose…",
+      "A dozen stalls, one nose…",
     ],
     reading: [
       "Reading the descriptions: titles only tell half the story…",
@@ -159,6 +225,12 @@ const PACKS: Record<Lang, PhrasePack> = {
       search_marketplace: "Asking on Facebook Marketplace",
       get_listing: "Opening the Facebook listing",
       search_location: "Looking up the location",
+      search_wallapop: "Browsing Wallapop",
+      search_trovaprezzi: "Querying Trovaprezzi",
+      search_idealo: "Comparing on idealo",
+      search_mediaworld: "Browsing MediaWorld",
+      search_unieuro: "Browsing Unieuro",
+      search_zalando: "Browsing Zalando",
     },
   },
   es: {
@@ -195,11 +267,41 @@ const PACKS: Record<Lang, PhrasePack> = {
         "Fiuto curiosea los escaparates del barrio…",
         "En Marketplace se cierra el trato con un apretón de manos…",
       ],
+      wallapop: [
+        "Fiuto llama a la puerta de los particulares en Wallapop…",
+        "En Wallapop se vende desde casa, Fiuto mete el hocico…",
+        "Rebusco en los áticos de Wallapop…",
+      ],
+      trovaprezzi: [
+        "Fiuto pide el precio a mil tiendas en Trovaprezzi…",
+        "En Trovaprezzi las tiendas se pelean por el mejor precio…",
+        "Fiuto recorre las tiendas online con Trovaprezzi…",
+      ],
+      idealo: [
+        "Fiuto compara tarifas en idealo…",
+        "Busco la tienda más barata en idealo…",
+        "Fiuto olfatea el precio más bajo en idealo…",
+      ],
+      mediaworld: [
+        "Fiuto entra en MediaWorld, entre las estanterías de electrónica…",
+        "Busco la etiqueta roja en MediaWorld…",
+        "Paseo entre las neveras y los televisores de MediaWorld…",
+      ],
+      unieuro: [
+        "Fiuto pasa por Unieuro a mirar las etiquetas…",
+        "Entre los electrodomésticos de Unieuro huele a descuento…",
+        "Fiuto hace cola en la caja de Unieuro…",
+      ],
+      zalando: [
+        "Fiuto se prueba zapatos en Zalando…",
+        "Rebusco entre las estanterías de moda de Zalando…",
+        "En Zalando Fiuto huele las rebajas de lejos…",
+      ],
     },
     many: [
       "Fiuto corre de puesto en puesto…",
       "Fiuto da la vuelta al bazar, todo en paralelo…",
-      "Cinco puestos, una sola nariz…",
+      "Una docena de puestos, una sola nariz…",
     ],
     reading: [
       "Leyendo las descripciones: los títulos solo cuentan la mitad…",
@@ -229,6 +331,12 @@ const PACKS: Record<Lang, PhrasePack> = {
       search_marketplace: "Pregunto en Facebook Marketplace",
       get_listing: "Abro el anuncio de Facebook",
       search_location: "Busco la localidad",
+      search_wallapop: "Rebusco en Wallapop",
+      search_trovaprezzi: "Consulto Trovaprezzi",
+      search_idealo: "Comparo en idealo",
+      search_mediaworld: "Paseo por MediaWorld",
+      search_unieuro: "Paseo por Unieuro",
+      search_zalando: "Hojeo Zalando",
     },
   },
   fr: {
@@ -265,11 +373,41 @@ const PACKS: Record<Lang, PhrasePack> = {
         "Fiuto lorgne les vitrines du quartier…",
         "Sur Marketplace, on conclut d'une poignée de main…",
       ],
+      wallapop: [
+        "Fiuto frappe chez les particuliers sur Wallapop…",
+        "Sur Wallapop on vend depuis chez soi, Fiuto y met le nez…",
+        "Je fouille les greniers de Wallapop…",
+      ],
+      trovaprezzi: [
+        "Fiuto demande son prix à mille boutiques sur Trovaprezzi…",
+        "Sur Trovaprezzi les boutiques se battent pour le meilleur prix…",
+        "Fiuto fait le tour des boutiques en ligne via Trovaprezzi…",
+      ],
+      idealo: [
+        "Fiuto compare les tarifs sur idealo…",
+        "Je cherche la boutique la moins chère sur idealo…",
+        "Fiuto déniche le prix le plus bas sur idealo…",
+      ],
+      mediaworld: [
+        "Fiuto entre chez MediaWorld, entre les rayons d'électronique…",
+        "Je cherche l'étiquette rouge chez MediaWorld…",
+        "Un tour parmi les frigos et les télés de MediaWorld…",
+      ],
+      unieuro: [
+        "Fiuto passe chez Unieuro vérifier les étiquettes…",
+        "Parmi les appareils de Unieuro, ça sent la remise…",
+        "Fiuto fait la queue à la caisse d'Unieuro…",
+      ],
+      zalando: [
+        "Fiuto essaie des chaussures chez Zalando…",
+        "Je fouille les rayons mode de Zalando…",
+        "Sur Zalando Fiuto flaire les soldes de loin…",
+      ],
     },
     many: [
       "Fiuto court d'étal en étal…",
       "Fiuto fait le tour du bazar, tout en parallèle…",
-      "Cinq étals, un seul nez…",
+      "Une douzaine d'étals, un seul nez…",
     ],
     reading: [
       "Je lis les descriptions : les titres ne racontent que la moitié de l'histoire…",
@@ -299,6 +437,12 @@ const PACKS: Record<Lang, PhrasePack> = {
       search_marketplace: "Je demande sur Facebook Marketplace",
       get_listing: "J'ouvre l'annonce Facebook",
       search_location: "Je cherche la localité",
+      search_wallapop: "Je fouille Wallapop",
+      search_trovaprezzi: "J'interroge Trovaprezzi",
+      search_idealo: "Je compare sur idealo",
+      search_mediaworld: "Je passe chez MediaWorld",
+      search_unieuro: "Je passe chez Unieuro",
+      search_zalando: "Je feuillette Zalando",
     },
   },
   de: {
@@ -335,11 +479,41 @@ const PACKS: Record<Lang, PhrasePack> = {
         "Fiuto linst in die Schaufenster der Nachbarschaft…",
         "Auf Marketplace besiegelt man den Deal per Handschlag…",
       ],
+      wallapop: [
+        "Fiuto klopft bei Privatleuten auf Wallapop an…",
+        "Auf Wallapop verkauft man von zu Hause, Fiuto steckt die Nase rein…",
+        "Ich stöbere in den Dachböden von Wallapop…",
+      ],
+      trovaprezzi: [
+        "Fiuto fragt tausend Shops auf Trovaprezzi nach dem Preis…",
+        "Auf Trovaprezzi streiten sich die Shops um den besten Preis…",
+        "Fiuto klappert die Online-Shops über Trovaprezzi ab…",
+      ],
+      idealo: [
+        "Fiuto vergleicht Preislisten auf idealo…",
+        "Ich suche den günstigsten Shop auf idealo…",
+        "Fiuto schnüffelt den niedrigsten Preis auf idealo auf…",
+      ],
+      mediaworld: [
+        "Fiuto betritt MediaWorld, zwischen den Elektronikregalen…",
+        "Ich suche das rote Schild bei MediaWorld…",
+        "Ein Rundgang zwischen Kühlschränken und Fernsehern bei MediaWorld…",
+      ],
+      unieuro: [
+        "Fiuto schaut bei Unieuro auf die Preisschilder…",
+        "Zwischen den Haushaltsgeräten bei Unieuro liegt Rabatt in der Luft…",
+        "Fiuto steht an der Kasse von Unieuro an…",
+      ],
+      zalando: [
+        "Fiuto probiert bei Zalando Schuhe an…",
+        "Ich stöbere in den Moderegalen von Zalando…",
+        "Bei Zalando riecht Fiuto den Sale schon von Weitem…",
+      ],
     },
     many: [
       "Fiuto rennt von Stand zu Stand…",
       "Fiuto dreht eine Runde durch den Basar, alles parallel…",
-      "Fünf Stände, eine Nase…",
+      "Ein Dutzend Stände, eine Nase…",
     ],
     reading: [
       "Ich lese die Beschreibungen: Titel erzählen nur die halbe Geschichte…",
@@ -369,6 +543,12 @@ const PACKS: Record<Lang, PhrasePack> = {
       search_marketplace: "Ich frage auf Facebook Marketplace",
       get_listing: "Ich öffne die Facebook-Anzeige",
       search_location: "Ich suche den Ort",
+      search_wallapop: "Ich stöbere auf Wallapop",
+      search_trovaprezzi: "Ich frage Trovaprezzi",
+      search_idealo: "Ich vergleiche auf idealo",
+      search_mediaworld: "Ich schaue bei MediaWorld",
+      search_unieuro: "Ich schaue bei Unieuro",
+      search_zalando: "Ich blättere durch Zalando",
     },
   },
 };
@@ -385,6 +565,12 @@ const SERVER_NAMES: Record<MarketplaceId, string> = {
   subito: "Subito",
   ebay: "eBay",
   "facebook-marketplace": "Facebook Marketplace",
+  wallapop: "Wallapop",
+  trovaprezzi: "Trovaprezzi",
+  idealo: "idealo",
+  mediaworld: "MediaWorld",
+  unieuro: "Unieuro",
+  zalando: "Zalando",
 };
 
 /** Cambia frase ogni 3,5 s; il seed (es. l'id del messaggio) evita che ogni ricerca parta con la stessa. */

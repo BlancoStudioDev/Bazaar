@@ -17,7 +17,8 @@ export type DiscardReason =
   | "accessorio"
   | "non_pertinente"
   | "prezzo_sospetto"
-  | "senza_prezzo";
+  | "senza_prezzo"
+  | "estero";
 
 export function queryKey(query: string | null | undefined): string {
   return (query || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -143,7 +144,11 @@ function hasToken(titleTokens: Set<string>, normalizedTitle: string, token: stri
  * ; senza cifre, almeno un terzo delle parole significative deve essere presente.
  * Nessuna lista di varianti: Pro/Super/Ti ecc. restano e le distingue il modello.
  */
-export function relevanceReason(title: string, query: string): DiscardReason | null {
+export function relevanceReason(
+  title: string,
+  query: string,
+  options: { digitsOnly?: boolean } = {},
+): DiscardReason | null {
   const queryTokens = tokens(query);
   if (!queryTokens.length) return null;
   const normalizedTitle = normalizeText(title);
@@ -174,7 +179,9 @@ export function relevanceReason(title: string, query: string): DiscardReason | n
   );
   // Con un numero di modello nella query l'identità è già verificata dalle cifre:
   // parole generiche come "scheda video" non devono scartare risultati validi.
-  if (words.length && !digitTokens.length) {
+  // digitsOnly: negozi il cui titolo non ripete categoria e colore della query ("Sneakers basse - white" per
+  // "scarpe ... bianche"): lì basta il controllo sui modelli/numeri, il resto lo fa il motore del sito.
+  if (words.length && !digitTokens.length && !options.digitsOnly) {
     const matched = words.filter((word) => {
       if (titleTokens.has(word)) return true;
       const stem = word.slice(0, Math.max(4, word.length - 2));

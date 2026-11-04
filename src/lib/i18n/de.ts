@@ -14,7 +14,7 @@ export const de: Dict = {
   "brand.tagline2": "für jedes Schnäppchen.",
   "meta.title": "Bazaar — die richtige Nase für jedes Schnäppchen",
   "meta.description":
-    "Der Personal Shopper mit Nase für Schnäppchen: sucht auf Amazon, eBay, AliExpress, Vinted, Subito und Facebook Marketplace in einem einzigen Chat, vergleicht echte Preise und sagt dir, wo es am günstigsten ist.",
+    "Der Personal Shopper mit Nase für Schnäppchen: sucht auf Amazon, eBay, AliExpress, Vinted, Subito, Wallapop, Facebook Marketplace, Trovaprezzi, idealo, MediaWorld, Unieuro und Zalando in einem einzigen Chat, vergleicht echte Preise und sagt dir, wo es am günstigsten ist.",
   "meta.ogDescription": "Der Personal Shopper, der echte Preise auf mehreren Marktplätzen vergleicht und dir sagt, wo es am günstigsten ist.",
 
   "app.newSearch": "Neue Suche",
@@ -230,11 +230,11 @@ export const de: Dict = {
   "srv.paidPrice": ", ~${price} pro 1 Mio. Tokens",
   "srv.paidTag": "kostenpflichtig",
   "srv.localAds":
-    "Lokale Anzeigen in {city}: {parts}. Amazon, eBay, AliExpress und Vinted versenden von anderswo.",
+    "Lokale Anzeigen in {city}: {parts}. Amazon, eBay, AliExpress, Vinted und die Online-Shops versenden von anderswo.",
   "srv.maxRounds": "Fiuto hat für diese Antwort genug Runden gedreht: Ich schließe mit dem ab, was ich gefunden habe.",
   "srv.filterLabel": "Bazaar-Filter",
   "guard.fuori_tema":
-    "Hier macht Fiuto nur eines, aber das gut: Schnäppchen auf Marktplätzen aufspüren (Amazon, AliExpress, Vinted, Subito, Facebook Marketplace). Sag mir, was du kaufen möchtest, zum Beispiel „eine gebrauchte RTX 4070 in Mailand“.",
+    "Hier macht Fiuto nur eines, aber das gut: Schnäppchen auf Marktplätzen aufspüren (Amazon, AliExpress, Vinted, Subito, Wallapop, Facebook Marketplace, Trovaprezzi, idealo, MediaWorld, Unieuro, Zalando). Sag mir, was du kaufen möchtest, zum Beispiel „eine gebrauchte RTX 4070 in Mailand“.",
   "guard.illegale":
     "An diesem Stand verkehrt Fiuto nicht. Ich kann aber nach legalen Produkten suchen: Sag mir, was du brauchst.",
   "guard.abuso": "Lieber wieder die Nase in die Schnäppchen stecken. Schreib mir, welches Produkt du suchst, und ich vergleiche es für dich.",
@@ -245,16 +245,16 @@ export const de: Dict = {
 
   "lp.metaTitle": "Bazaar: die richtige Nase für jedes Schnäppchen",
   "lp.metaDescription":
-    "Schreib, was du suchst: Fiuto klappert Amazon, AliExpress, Vinted und Subito.it ab, liest die Anzeigen und sagt dir, wo es am günstigsten ist. Ein einziger Chat, direkte Links, keine Karte.",
+    "Schreib, was du suchst: Fiuto klappert Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando und weitere ab, liest die Anzeigen und sagt dir, wo es am günstigsten ist. Ein einziger Chat, direkte Links, keine Karte.",
   "lp.ldDescription":
-    "Ein Chat, der auf Amazon, AliExpress, Vinted und Subito.it sucht, die Beschreibungen der Anzeigen liest und Preise vergleicht. Er verkauft keine Produkte.",
+    "Ein Chat, der auf Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando und weitere sucht, die Beschreibungen der Anzeigen liest und Preise vergleicht. Er verkauft keine Produkte.",
   "lp.skip": "Zum Inhalt springen",
   "lp.homeAria": "Bazaar, Startseite",
   "lp.signIn": "Anmelden",
   "lp.langLabel": "Sprache",
   "lp.h1a": "Schluss mit zwanzig offenen Tabs.",
   "lp.h1b": "Frag Fiuto.",
-  "lp.lead": "Ein einziger Chat klappert Amazon, AliExpress, Vinted und Subito.it ab und sagt dir, wo es sich wirklich lohnt.",
+  "lp.lead": "Ein einziger Chat klappert Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando und weitere ab und sagt dir, wo es sich wirklich lohnt.",
   "lp.cta": "Mit OnionRings anmelden",
   "lp.trust": "Anmeldung mit deinem OnionRings-Konto · keine Karte nötig",
   "lp.foxTitle": "Fiuto, der Wüstenfuchs, hinter seinem Stand",
@@ -289,8 +289,8 @@ export const de: Dict = {
   "lp.run": "Fiuto hat 4 Stände abgeklappert · 27 Anzeigen",
   "lp.diffTitle1": "Was er",
   "lp.diffTitle2": "anders macht",
-  "lp.d1.title": "Vier Stände, eine Frage",
-  "lp.d1.body": "Amazon, AliExpress, Vinted und Subito.it auf einen Schlag. Keine zwanzig Tabs nebeneinander.",
+  "lp.d1.title": "Viele Stände, eine Frage",
+  "lp.d1.body": "Amazon, AliExpress, Vinted, Subito.it, Trovaprezzi, MediaWorld, Zalando und weitere auf einen Schlag. Keine zwanzig Tabs nebeneinander.",
   "lp.d2.title": "Liest die Beschreibungen, nicht nur die Titel",
   "lp.d2.body": "Der Titel sagt „SSD 1 TB“, die Beschreibung sagt „nur das Gehäuse“. Fiuto liest beides.",
   "lp.d3.title": "Sortiert die Fallen aus",
@@ -323,7 +323,7 @@ export const de: Dict = {
   "lp.f5.a":
     "Um faire Nutzungslimits für alle zu halten und damit das Teilen von Chats funktioniert. Man meldet sich mit dem OnionRings-Konto an, ohne Karte.",
   "lp.f6.q": "Und Facebook Marketplace?",
-  "lp.f6.a": "Noch nicht. Derzeit sucht Fiuto auf Amazon, AliExpress, Vinted und Subito.it.",
+  "lp.f6.a": "Noch nicht. Derzeit sucht Fiuto auf Amazon, AliExpress, Vinted, Subito.it, Wallapop, Trovaprezzi, idealo, MediaWorld, Unieuro und Zalando.",
   "lp.finalTitle": "Der Stand ist offen.",
   "lp.finalLead": "Sag mir, was du suchst. Den Rest erledigt Fiuto.",
   "lp.footerBy": "Bazaar by BlancoStudio",

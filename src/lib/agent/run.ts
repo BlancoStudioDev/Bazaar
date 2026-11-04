@@ -9,11 +9,14 @@ import {
   type GuardVerdict,
 } from "@/lib/agent/guard";
 import { coerceLang, detectMessageLang, t, type Lang } from "@/lib/i18n";
+import { MARKETPLACES, MARKETPLACE_IDS } from "@/lib/marketplaces";
 import { getMcpManager } from "@/lib/mcp/manager";
 import { toolLabel } from "@/lib/mcp/config";
 import {
   compactToolOutputForModel,
+  MAX_TOTAL_TOOL_CHARS,
   filterOutputByCity,
+  modelBudget,
   normalizeToolOutput,
   summarizeToolContentForModel,
   type ToolOutput,
@@ -43,10 +46,30 @@ import type {
 } from "@/lib/types";
 
 const MAX_ROUNDS = 4;
-const MAX_TOOL_CALLS_PER_ROUND = 10;
+// 9 marketplace di base + i negozi specializzati che il modello sceglie di chiamare.
+const MAX_TOOL_CALLS_PER_ROUND = 12;
 const MAX_HISTORY_MESSAGES = 8;
 const MAX_MESSAGE_CHARS = 3_000;
 const MAX_TOOL_CHARS = 6_000;
+
+/** Città riconosciute dal server Wallapop: con un'altra la ricerca fallisce intera ("Città non riconosciuta"). */
+const WALLAPOP_CITIES = new Set(
+  [
+    "milano", "roma", "napoli", "torino", "palermo", "genova", "bologna", "firenze", "bari", "catania",
+    "venezia", "verona", "messina", "padova", "trieste", "brescia", "parma", "taranto", "prato", "modena",
+    "reggio calabria", "reggio emilia", "perugia", "livorno", "cagliari", "ravenna", "rimini", "salerno",
+    "ferrara", "sassari", "bergamo", "pescara", "trento", "vicenza", "bolzano", "ancona", "udine", "como",
+    "lecce", "foggia", "latina", "monza", "siracusa", "terni", "novara", "piacenza", "cosenza", "pisa",
+  ],
+);
+const STRICT_SCHEMA_SERVERS = new Set<MarketplaceId>([
+  "trovaprezzi", "idealo", "mediaworld", "zalando", "unieuro", "wallapop",
+]);
+const ZALANDO_GENDERS = new Set(["donna", "uomo", "bambini"]);
+
+function foldCity(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
 
 function cleanHistory(messages: ChatRequestBody["messages"]): Array<{ role: "user" | "assistant"; content: string }> {
   const cleaned = (messages || [])
@@ -107,18 +130,35 @@ function prepareToolArguments(
     }
   }
 
+  if (tool === "search_wallapop") {
+    // Wallapop conosce solo le principali città italiane: con un'altra meglio il default (Milano) che un errore.
+    if (WALLAPOP_CITIES.has(foldCity(city))) prepared.city = city.trim().toLowerCase();
+    else delete prepared.city;
+  }
+  if (tool === "search_zalando") {
+    const gender = typeof prepared.gender === "string" ? prepared.gender.trim().toLowerCase() : "";
+    if (ZALANDO_GENDERS.has(gender)) prepared.gender = gender;
+    else delete prepared.gender;
+  }
+
   if (tool.startsWith("search_")) {
     // Il limite scelto dal modello non conta: chiedere più annunci al server non costa token
     // (al modello ne arrivano comunque pochi) ma dà alla Bacheca e ai filtri più materiale.
     prepared.limit = 24;
   }
   // La città (impostazioni, o quella nominata esplicitamente dall'utente) vince sempre su quella scelta dal modello.
-  if (hasCityParam || tool === "search_marketplace") prepared.city = city;
+  if ((hasCityParam && tool !== "search_wallapop") || tool === "search_marketplace") prepared.city = city;
   // Su Subito "solo spedibili" serve proprio a uscire dalla provincia: senza una città chiesta
   // dall'utente cerca in tutta Italia invece che solo nella città delle Impostazioni.
   if (tool === "search_subito" && prepared.shipping_only === true && !cityIsExplicit) {
     delete prepared.city;
     delete prepared.region;
+  }
+  if (tool === "search_marketplace" && typeof prepared.sort === "string") {
+    // I modelli scrivono "price_asc": il server Facebook accetta solo i suoi valori e altrimenti rifiuta la ricerca.
+    const sort = prepared.sort.toLowerCase();
+    if (/^price[_ -]?(asc|low)/.test(sort)) prepared.sort = "prezzo_crescente";
+    else if (/^price[_ -]?(desc|high)/.test(sort)) prepared.sort = "prezzo_decrescente";
   }
   if (tool === "search_marketplace") {
     const radius = Number(prepared.radius_km);
@@ -130,6 +170,53 @@ function prepareToolArguments(
     prepared.format = "json";
   }
   return prepared;
+}
+
+/**
+ * Adegua gli argomenti allo schema del tool: toglie quelli sconosciuti (i server nuovi li rifiutano)
+ * e arrotonda i numeri dei parametri interi (min_price 399.99 su un int farebbe fallire la ricerca).
+ */
+function fitToSchema(tools: OpenRouterTool[], toolName: string, args: Record<string, unknown>): Record<string, unknown> {
+  const tool = tools.find((entry) => entry.function.name === toolName);
+  const properties = tool?.function.parameters?.properties as Record<string, { type?: unknown; anyOf?: unknown }> | undefined;
+  if (!properties) return args;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    const prop = properties[key];
+    if (!prop) continue;
+    const types = JSON.stringify(prop.type ?? prop.anyOf ?? "");
+    if (typeof value === "string" && /integer|number/.test(types) && !/string/.test(types)) {
+      const parsed = Number(value.replace(",", "."));
+      if (!Number.isFinite(parsed)) continue;
+      out[key] = /integer/.test(types) ? Math.round(parsed) : parsed;
+    } else if (typeof value === "number" && /integer/.test(types) && !/number/.test(types)) {
+      out[key] = Math.round(value);
+    } else out[key] = value;
+  }
+  return out;
+}
+
+/** Schemi per il modello: limit e format li imposta l'app (vedi prepareToolArguments), quindi non li mostro. */
+function withoutAppParams(tools: OpenRouterTool[]): OpenRouterTool[] {
+  return tools.map((tool) => {
+    if (!tool.function.name.startsWith("search_")) return tool;
+    const schema = tool.function.parameters as { properties?: Record<string, unknown>; required?: string[] } | undefined;
+    if (!schema?.properties) return tool;
+    const properties = { ...schema.properties };
+    delete properties.limit;
+    delete properties.format;
+    return {
+      ...tool,
+      function: {
+        ...tool.function,
+        parameters: {
+          ...schema,
+          properties,
+          ...(schema.required ? { required: schema.required.filter((key) => key !== "limit" && key !== "format") } : {}),
+        },
+      },
+    };
+  });
 }
 
 function supportsJsonFormat(tools: OpenRouterTool[], toolName: string): boolean {
@@ -411,7 +498,7 @@ export async function runAgent(options: {
   const city = explicitCity || settingsCity;
   const requestedMarketplaces = Array.isArray(body.marketplaces)
     ? body.marketplaces.filter((id): id is MarketplaceId =>
-        ["amazon", "ebay", "aliexpress", "vinted", "subito", "facebook-marketplace"].includes(id),
+        (MARKETPLACE_IDS as string[]).includes(id),
       )
     : undefined;
 
@@ -451,6 +538,8 @@ export async function runAgent(options: {
     throw new Error(t(lang, "srv.noMarketplace"));
   }
 
+  const modelTools = withoutAppParams(tools);
+
   const allowPaidFallback =
     Boolean(body.allowPaidFallback) &&
     process.env.OPENROUTER_ALLOW_PAID_FALLBACK === "true" &&
@@ -482,7 +571,7 @@ export async function runAgent(options: {
       messages,
       // Dopo il primo giro con risultati sufficienti il modello deve solo rispondere:
       // un secondo giro di raffinamento costa token e spesso torna a 0.
-      tools: round > 0 && foundProducts >= 3 ? [] : tools,
+      tools: round > 0 && foundProducts >= 3 ? [] : modelTools,
       // Ogni messaggio dell'utente richiede una ricerca reale: le risposte precedenti non contengono i dati dei tool,
       // quindi senza nuova ricerca il modello inventerebbe (es. località) da una risposta già scritta.
       toolChoice: round === 0 ? "required" : "auto",
@@ -502,14 +591,16 @@ export async function runAgent(options: {
 
     const toolCalls = result.toolCalls.slice(0, MAX_TOOL_CALLS_PER_ROUND);
     if (round === 0) {
-      // I modelli piccoli saltano spesso dei marketplace: copro io quelli attivi rimasti
-      // con la stessa query (le ricerche sono parallele e gratuite, pesano solo nel contesto).
+      // I modelli piccoli saltano spesso dei marketplace: copro io quelli attivi rimasti con la stessa query
+      // (le ricerche sono parallele e gratuite, pesano solo nel contesto). Solo l'insieme di base
+      // (`autoCover`): i negozi specializzati (elettronica, moda) li chiama il modello quando servono.
       const searched = new Set(toolCalls.map((call) => manager.resolveTool(call.function.name)?.server));
       const first = toolCalls.find((call) => manager.resolveTool(call.function.name)?.tool.startsWith("search_"));
       const query = first ? parseToolArguments(first.function.arguments).query : null;
       if (typeof query === "string" && query.trim()) {
         for (const server of online) {
           if (searched.has(server) || toolCalls.length >= MAX_TOOL_CALLS_PER_ROUND) continue;
+          if (!MARKETPLACES[server]?.autoCover) continue;
           const name = tools
             .map((tool) => tool.function.name)
             .find((n) => {
@@ -588,7 +679,7 @@ export async function runAgent(options: {
           };
         }
 
-        const args = prepareToolArguments(
+        const prepared = prepareToolArguments(
           resolved.tool,
           parseToolArguments(call.function.arguments),
           city,
@@ -596,6 +687,10 @@ export async function runAgent(options: {
           supportsParam(tools, resolved.tool, "city"),
           Boolean(explicitCity),
         );
+        // I server nuovi hanno schemi rigidi (int, enum): argomenti inventati o non interi farebbero fallire la ricerca.
+        const args = STRICT_SCHEMA_SERVERS.has(resolved.server)
+          ? fitToSchema(tools, resolved.tool, prepared)
+          : prepared;
         activity.args = args;
         emit({ type: "activity", activity: { ...activity, args } });
 
@@ -639,18 +734,35 @@ export async function runAgent(options: {
         : [],
     );
     if (searches.length) {
+      // Con molti negozi interrogati nello stesso giro: meno annunci per negozio e un tetto sul totale.
+      const budget = modelBudget(searches.length);
       const changed = await enrichWithDescriptions(
         searches.map((s) => ({ ...s, ok: true })),
         signal,
+        budget.items,
       );
-      for (const s of searches) {
-        s.e.modelContent = compactToolOutputForModel(s.server, s.tool, s.output);
-        if (changed) emit({ type: "activity", activity: { ...s.e.activity, products: s.output.products } });
+      let items = budget.items;
+      const render = () => {
+        for (const s of searches) {
+          s.e.modelContent = compactToolOutputForModel(s.server, s.tool, s.output, items, budget.chars);
+        }
+      };
+      render();
+      while (items > 2 && searches.reduce((n, s) => n + s.e.modelContent.length, 0) > MAX_TOTAL_TOOL_CHARS) {
+        items -= 1;
+        render();
+      }
+      if (changed) {
+        for (const s of searches) emit({ type: "activity", activity: { ...s.e.activity, products: s.output.products } });
       }
     }
 
     if (explicitCity) {
-      const names: Record<string, string> = { subito: "Subito", "facebook-marketplace": "Facebook Marketplace" };
+      const names: Record<string, string> = {
+        subito: "Subito",
+        wallapop: "Wallapop",
+        "facebook-marketplace": "Facebook Marketplace",
+      };
       const local = executions.filter((e) => e.activity.server in names && e.activity.status === "done");
       if (local.length) {
         const parts = local.map((e) => `${names[e.activity.server]} ${e.activity.count ?? 0}`);

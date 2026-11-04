@@ -1,6 +1,6 @@
 # bazaar
 
-Personal shopper conversazionale che cerca in tempo reale su sei marketplace — **Amazon.it, eBay (venduti US/UK), AliExpress, Vinted, Subito.it e Facebook Marketplace** — confronta i prezzi e dice dove conviene comprare.
+Personal shopper conversazionale che cerca in tempo reale su dodici marketplace e negozi — **Amazon.it, eBay (venduti US/UK), AliExpress, Vinted, Subito.it, Wallapop, Facebook Marketplace**, i comparatori **Trovaprezzi** e **idealo**, e **MediaWorld, Unieuro e Zalando** — confronta i prezzi e dice dove conviene comprare.
 
 Non è un catalogo: è una chat. Scrivi cosa cerchi, Bazaar chiama i server MCP locali, normalizza gli annunci in schede prodotto e risponde con una raccomandazione secca, una tabella comparativa e i link agli annunci. I risultati restano anche nella **Bacheca**, ordinabili per prezzo o per fonte.
 
@@ -60,7 +60,7 @@ npm start
 | `OPENROUTER_CHEAP_MODELS` | dinamico | Tier economico a pagamento (id separati da virgola). Default: i 3 modelli con tool support più economici del catalogo OpenRouter (gpt-oss, qwen, deepseek, gemini flash, llama, glm, mistral, gemma) sopra una soglia di qualità/contesto. |
 | `OPENROUTER_PAID_FALLBACK_MODEL` | `deepseek/deepseek-v4.1-flash` | Ultima riserva fissa, dopo free e tier economico (richiede il toggle nelle impostazioni). |
 | `MCP_ROOT` | `~/.config/opencode/mcp` | Radice dei server MCP. |
-| `MCP_PYTHON_SHARED` | `$MCP_ROOT/.venv/bin/python` | Python per Amazon, eBay, AliExpress, Vinted. |
+| `MCP_PYTHON_SHARED` | `$MCP_ROOT/.venv/bin/python` | Python per Amazon, eBay, AliExpress, Vinted, Wallapop, Trovaprezzi, idealo, MediaWorld, Unieuro, Zalando. |
 | `MCP_PYTHON_SUBITO` | `$MCP_ROOT/subito-search/.venv/bin/python` | Python per Subito. |
 | `MCP_PYTHON_FACEBOOK` | `$MCP_ROOT/facebook-marketplace/.venv/bin/python` | Python per Facebook Marketplace. |
 | `TRAWL_API_KEY` | — | Chiave [trawl.dev](https://trawl.dev/signup) (gratuita, 1 credito per ricerca) per eBay: sono prezzi di **vendita** reali su ebay.com / ebay.co.uk (USD/GBP), usati come riferimento di mercato, non offerte acquistabili. Senza, eBay risponde con un errore esplicito. |
@@ -98,7 +98,8 @@ Next.js Route Handler
   │                                         ├─ aliexpress
   │                                         ├─ vinted
   │                                         ├─ subito-search
-  │                                         └─ facebook-marketplace
+  │                                         ├─ facebook-marketplace
+  │                                         └─ wallapop · trovaprezzi · idealo · mediaworld · unieuro · zalando
   │
   └─ mcp/normalize.ts ──────────► Product[] + JSON compatto per il modello
 ```
